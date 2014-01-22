@@ -206,6 +206,9 @@ if test "$enable_wayland_target" != "no"; then
     PKG_CHECK_MODULES([GTK_WAYLAND], [
         gtk+-wayland-$GTK_API_VERSION = $GTK_ACTUAL_VERSION
         gtk+-wayland-$GTK_API_VERSION >= gtk3_wayland_required_version
+        wayland-client >= 1.3.9
+        wayland-server >= 1.3.9
+        wayland-egl >= 10.1.0
     ], [enable_wayland_target=yes], [
         if test "$enable_wayland_target" = "yes"; then
             AC_MSG_ERROR([GTK+ Wayland dependency (gtk+-wayland-$GTK_API_VERSION >= gtk3_wayland_required_version) not found.])
@@ -215,6 +218,10 @@ if test "$enable_wayland_target" != "no"; then
         fi
     ])
 fi
+
+# @FIXME: not sure if this is necessary
+AC_SUBST(GTK_WAYLAND_CFLAGS)
+AC_SUBST(GTK_WAYLAND_LIBS)
 
 AC_CHECK_HEADERS([GL/glx.h], [have_glx="yes"], [have_glx="no"])
 AC_MSG_CHECKING([whether to enable GLX support])

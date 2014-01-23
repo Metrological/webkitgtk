@@ -34,6 +34,12 @@
 #include "TextureMapperLayer.h"
 #include <WebCore/GLContext.h>
 #include <WebCore/GraphicsLayerClient.h>
+
+#include <gdk/gdk.h>
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#include <WebCore/WaylandSurface.h>
+#endif
+
 #include <wtf/HashMap.h>
 #include <wtf/OwnPtr.h>
 
@@ -91,6 +97,7 @@ private:
     void flushAndRenderLayers();
     void cancelPendingLayerFlush();
 
+    void queueLayerFlush(unsigned);
     void layerFlushTimerFired();
     static gboolean layerFlushTimerFiredCallback(LayerTreeHostGtk*);
 
@@ -108,6 +115,10 @@ private:
     double m_lastFlushTime;
     bool m_layerFlushSchedulingEnabled;
     unsigned m_layerFlushTimerCallbackId;
+
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    OwnPtr<WebCore::WaylandSurface> m_wlSurface;
+#endif
 };
 
 } // namespace WebKit

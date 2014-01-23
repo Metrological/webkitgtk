@@ -49,6 +49,11 @@
 #include <wtf/CurrentTime.h>
 
 #include <gdk/gdk.h>
+
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#include "WaylandDisplay.h"
+#endif
+
 #if defined(GDK_WINDOWING_X11)
 #define Region XRegion
 #define Font XFont
@@ -87,18 +92,18 @@ GLContext* LayerTreeHostGtk::glContext()
     if (m_context)
         return m_context.get();
 
-#if !PLATFORM(WAYLAND)
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    EGLNativeWindowType windowHandle = m_wlSurface ? m_wlSurface->nativeWindowHandle() : 0;
+#else
     uint64_t windowHandle = m_webPage->nativeWindowHandle();
+#endif
     if (!windowHandle)
         return 0;
 
+#if !PLATFORM(WAYLAND) || (USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2))
     m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
     return m_context.get();
 #elif USE(GLX)
-    uint64_t windowHandle = m_webPage->nativeWindowHandle();
-    if (!windowHandle)
-        return 0;
-
     m_context = GLContextGLX::createContext(windowHandle, GLContext::sharingContext());
     return m_context.get();
 #else
@@ -128,7 +133,23 @@ void LayerTreeHostGtk::initialize()
     m_rootLayer->addChild(m_nonCompositedContentLayer.get());
     m_nonCompositedContentLayer->setNeedsDisplay();
 
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    // Request a wayland surface from the nested wayland compositor
+    WaylandDisplay* display = WaylandDisplay::instance();
+    m_wlSurface = display->createSurface(1, 1);
+    if (!m_wlSurface)
+        return;
+
+    // Resize the surface to match the size of the web page
+    IntSize webPageSize = m_webPage->size();
+    wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), webPageSize.width(), webPageSize.height(), 0, 0);
+
+    // FIXME: We need a non-zero window handle so that webkit realizes we are good to go for AC.
+    // We can probably find a more elegant way to do this for Wayland
+    m_layerTreeContext.windowHandle = m_wlSurface->nativeWindowHandle() ? 1 : 0;
+#else
     m_layerTreeContext.windowHandle = m_webPage->nativeWindowHandle();
+#endif
 
     GLContext* context = glContext();
     if (!context)
@@ -225,6 +246,10 @@ void LayerTreeHostGtk::sizeDidChange(const IntSize& newSize)
         return;
     m_rootLayer->setSize(newSize);
 
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), newSize.width(), newSize.height(), 0, 0);
+#endif
+
     // If the newSize exposes new areas of the non-composited content a setNeedsDisplay is needed
     // for those newly exposed areas.
     FloatSize oldSize = m_nonCompositedContentLayer->size();
@@ -308,6 +333,16 @@ gboolean LayerTreeHostGtk::layerFlushTimerFiredCallback(LayerTreeHostGtk* layerT
     return FALSE;
 }
 
+void LayerTreeHostGtk::queueLayerFlush(unsigned interval)
+{
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    // Let the compositor know that we want to render a new frame
+    m_wlSurface->requestFrame();
+#endif
+    m_layerFlushTimerCallbackId = g_timeout_add_full(GDK_PRIORITY_EVENTS, interval, reinterpret_cast<GSourceFunc>(layerFlushTimerFiredCallback), this, 0);
+    g_source_set_name_by_id(m_layerFlushTimerCallbackId, "[WebKit] layerFlushTimerFiredCallback");
+}
+
 void LayerTreeHostGtk::layerFlushTimerFired()
 {
     ASSERT(m_layerFlushTimerCallbackId);
@@ -318,8 +353,7 @@ void LayerTreeHostGtk::layerFlushTimerFired()
     if (toTextureMapperLayer(m_rootLayer.get())->descendantsOrSelfHaveRunningAnimations() && !m_layerFlushTimerCallbackId) {
         const double targetFPS = 60;
         double nextFlush = std::max((1 / targetFPS) - (currentTime() - m_lastFlushTime), 0.0);
-        m_layerFlushTimerCallbackId = g_timeout_add_full(GDK_PRIORITY_EVENTS, nextFlush * 1000.0, reinterpret_cast<GSourceFunc>(layerFlushTimerFiredCallback), this, 0);
-        g_source_set_name_by_id(m_layerFlushTimerCallbackId, "[WebKit] layerFlushTimerFiredCallback");
+        queueLayerFlush(nextFlush * 1000.0);
     }
 }
 
@@ -418,10 +452,8 @@ void LayerTreeHostGtk::scheduleLayerFlush()
         return;
 
     // We use a GLib timer because otherwise GTK+ event handling during dragging can starve WebCore timers, which have a lower priority.
-    if (!m_layerFlushTimerCallbackId) {
-        m_layerFlushTimerCallbackId = g_timeout_add_full(GDK_PRIORITY_EVENTS, 0, reinterpret_cast<GSourceFunc>(layerFlushTimerFiredCallback), this, 0);
-        g_source_set_name_by_id(m_layerFlushTimerCallbackId, "[WebKit] layerFlushTimerFiredCallback");
-    }
+    if (!m_layerFlushTimerCallbackId)
+        queueLayerFlush(0);
 }
 
 void LayerTreeHostGtk::setLayerFlushSchedulingEnabled(bool layerFlushingEnabled)

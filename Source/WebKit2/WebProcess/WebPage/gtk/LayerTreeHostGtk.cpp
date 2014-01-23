@@ -57,6 +57,10 @@
 #include <gdk/gdkx.h>
 #endif
 
+#if USE(GLX)
+#include "GLContextGLX.h"
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
@@ -83,12 +87,23 @@ GLContext* LayerTreeHostGtk::glContext()
     if (m_context)
         return m_context.get();
 
+#if !PLATFORM(WAYLAND)
     uint64_t windowHandle = m_webPage->nativeWindowHandle();
     if (!windowHandle)
         return 0;
 
     m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
     return m_context.get();
+#elif USE(GLX)
+    uint64_t windowHandle = m_webPage->nativeWindowHandle();
+    if (!windowHandle)
+        return 0;
+
+    m_context = GLContextGLX::createContext(windowHandle, GLContext::sharingContext());
+    return m_context.get();
+#else
+    return 0;
+#endif
 }
 
 void LayerTreeHostGtk::initialize()

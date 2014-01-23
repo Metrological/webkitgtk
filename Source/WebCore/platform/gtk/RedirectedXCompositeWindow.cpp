@@ -37,6 +37,10 @@
 #include <gtk/gtk.h>
 #include <wtf/HashMap.h>
 
+#if USE(GLX)
+#include "GLContextGLX.h"
+#endif
+
 namespace WebCore {
 
 typedef HashMap<Window, RedirectedXCompositeWindow*> WindowHashMap;
@@ -199,7 +203,13 @@ GLContext* RedirectedXCompositeWindow::context()
         return m_context.get();
 
     ASSERT(m_window);
+#if !PLATFORM(WAYLAND)
     m_context = GLContext::createContextForWindow(m_window, GLContext::sharingContext());
+#elif USE(GLX)
+    m_context = GLContextGLX::createContext(m_window, GLContext::sharingContext());
+#else
+    return 0;
+#endif
     return m_context.get();
 }
 

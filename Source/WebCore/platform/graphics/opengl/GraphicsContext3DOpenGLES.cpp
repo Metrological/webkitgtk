@@ -183,6 +183,14 @@ bool GraphicsContext3D::texImage2D(GC3Denum target, GC3Dint level, GC3Denum inte
     return true;
 }
 
+void GraphicsContext3D::texSubImage2D(GC3Denum target, GC3Dint level, GC3Dint xoff, GC3Dint yoff, GC3Dsizei width, GC3Dsizei height, GC3Denum format, GC3Denum type, const void* pixels)
+{
+    makeContextCurrent();
+
+    // FIXME: we will need to deal with PixelStore params when dealing with image buffers that differ from the subimage size.
+    ::glTexSubImage2D(target, level, xoff, yoff, width, height, format, type, pixels);
+}
+
 void GraphicsContext3D::validateAttributes()
 {
     validateDepthStencil("GL_OES_packed_depth_stencil");

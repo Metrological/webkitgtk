@@ -1492,19 +1492,6 @@ GC3Dsizeiptr GraphicsContext3D::getVertexAttribOffset(GC3Duint index, GC3Denum p
     return static_cast<GC3Dsizeiptr>(reinterpret_cast<intptr_t>(pointer));
 }
 
-void GraphicsContext3D::texSubImage2D(GC3Denum target, GC3Dint level, GC3Dint xoff, GC3Dint yoff, GC3Dsizei width, GC3Dsizei height, GC3Denum format, GC3Denum type, const void* pixels)
-{
-    makeContextCurrent();
-
-#if !PLATFORM(IOS) && !USE(OPENGL_ES_2)
-    if (type == HALF_FLOAT_OES)
-        type = GL_HALF_FLOAT_ARB;
-#endif
-
-    // FIXME: we will need to deal with PixelStore params when dealing with image buffers that differ from the subimage size.
-    ::glTexSubImage2D(target, level, xoff, yoff, width, height, format, type, pixels);
-}
-
 void GraphicsContext3D::compressedTexImage2D(GC3Denum target, GC3Dint level, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height, GC3Dint border, GC3Dsizei imageSize, const void* data)
 {
     makeContextCurrent();

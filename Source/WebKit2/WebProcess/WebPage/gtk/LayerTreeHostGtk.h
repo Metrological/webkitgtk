@@ -36,7 +36,7 @@
 #include <WebCore/GraphicsLayerClient.h>
 
 #include <gdk/gdk.h>
-#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 #include <WebCore/WaylandSurface.h>
 #endif
 
@@ -103,6 +103,8 @@ private:
 
     WebCore::GLContext* glContext();
 
+    int getDisplayType();
+
     LayerTreeContext m_layerTreeContext;
     bool m_isValid;
     bool m_notifyAfterScheduledLayerFlush;
@@ -115,8 +117,9 @@ private:
     double m_lastFlushTime;
     bool m_layerFlushSchedulingEnabled;
     unsigned m_layerFlushTimerCallbackId;
+    int m_displayType;
 
-#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
     OwnPtr<WebCore::WaylandSurface> m_wlSurface;
 #endif
 };

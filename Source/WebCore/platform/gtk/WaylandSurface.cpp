@@ -27,7 +27,7 @@
 #include "config.h"
 #include "WaylandSurface.h"
 
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
 #include "WaylandDisplay.h"
 

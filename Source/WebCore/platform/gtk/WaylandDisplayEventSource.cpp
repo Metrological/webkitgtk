@@ -27,7 +27,7 @@
 #include "config.h"
 #include "WaylandDisplayEventSource.h"
 
-#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
 #include <wayland-server.h>
 

@@ -29,7 +29,7 @@
 
 #include <gdk/gdk.h>
 
-#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
 #include <wayland-client.h>
 

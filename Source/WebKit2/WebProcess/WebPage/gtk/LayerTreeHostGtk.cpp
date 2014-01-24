@@ -49,9 +49,11 @@
 #include <wtf/CurrentTime.h>
 
 #include <gdk/gdk.h>
-
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#if defined(GDK_WINDOWING_WAYLAND)
+#include <gdk/gdkwayland.h>
+#if USE(EGL) && PLATFORM(WAYLAND)
 #include "WaylandDisplay.h"
+#endif
 #endif
 
 #if defined(GDK_WINDOWING_X11)
@@ -70,6 +72,12 @@ using namespace WebCore;
 
 namespace WebKit {
 
+enum {
+  DISPLAY_TYPE_NONE = 0,
+  DISPLAY_TYPE_X11,
+  DISPLAY_TYPE_WAYLAND
+};
+
 PassRefPtr<LayerTreeHostGtk> LayerTreeHostGtk::create(WebPage* webPage)
 {
     RefPtr<LayerTreeHostGtk> host = adoptRef(new LayerTreeHostGtk(webPage));
@@ -84,7 +92,22 @@ LayerTreeHostGtk::LayerTreeHostGtk(WebPage* webPage)
     , m_lastFlushTime(0)
     , m_layerFlushSchedulingEnabled(true)
     , m_layerFlushTimerCallbackId(0)
+    , m_displayType(getDisplayType())
 {
+}
+
+int LayerTreeHostGtk::getDisplayType()
+{
+    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
+#if defined(GDK_WINDOWING_WAYLAND)
+    if (GDK_IS_WAYLAND_DISPLAY(display))
+        return DISPLAY_TYPE_WAYLAND;
+#endif
+#if defined(GDK_WINDOWING_X11)
+    if (GDK_IS_X11_DISPLAY(display))
+        return DISPLAY_TYPE_X11;
+#endif
+    return DISPLAY_TYPE_NONE;
 }
 
 GLContext* LayerTreeHostGtk::glContext()
@@ -92,23 +115,27 @@ GLContext* LayerTreeHostGtk::glContext()
     if (m_context)
         return m_context.get();
 
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
-    EGLNativeWindowType windowHandle = m_wlSurface ? m_wlSurface->nativeWindowHandle() : 0;
-#else
-    uint64_t windowHandle = m_webPage->nativeWindowHandle();
+    if (m_displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+        EGLNativeWindowType windowHandle = m_wlSurface ? m_wlSurface->nativeWindowHandle() : 0;
+        if (!windowHandle)
+            return 0;
+        m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
+        return m_context.get();
 #endif
-    if (!windowHandle)
-        return 0;
-
-#if !PLATFORM(WAYLAND) || (USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2))
-    m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
-    return m_context.get();
+    } else {
+        uint64_t windowHandle = m_webPage->nativeWindowHandle();
+        if (!windowHandle)
+            return 0;
+#if !PLATFORM(WAYLAND) // If we are building for both X11 and Wayland we need to force GLX for X11
+        m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
+        return m_context.get();
 #elif USE(GLX)
-    m_context = GLContextGLX::createContext(windowHandle, GLContext::sharingContext());
-    return m_context.get();
-#else
-    return 0;
+        m_context = GLContextGLX::createContext(windowHandle, GLContext::sharingContext());
+        return m_context.get();
 #endif
+    }
+    return 0;
 }
 
 void LayerTreeHostGtk::initialize()
@@ -133,23 +160,24 @@ void LayerTreeHostGtk::initialize()
     m_rootLayer->addChild(m_nonCompositedContentLayer.get());
     m_nonCompositedContentLayer->setNeedsDisplay();
 
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
-    // Request a wayland surface from the nested wayland compositor
-    WaylandDisplay* display = WaylandDisplay::instance();
-    m_wlSurface = display->createSurface(1, 1);
-    if (!m_wlSurface)
-        return;
+    if (m_displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+        // Request a wayland surface from the nested wayland compositor
+        WaylandDisplay* display = WaylandDisplay::instance();
+        m_wlSurface = display->createSurface(1, 1);
+        if (!m_wlSurface)
+            return;
 
-    // Resize the surface to match the size of the web page
-    IntSize webPageSize = m_webPage->size();
-    wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), webPageSize.width(), webPageSize.height(), 0, 0);
+        // Resize the surface to match the size of the web page
+        IntSize webPageSize = m_webPage->size();
+        wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), webPageSize.width(), webPageSize.height(), 0, 0);
 
-    // FIXME: We need a non-zero window handle so that webkit realizes we are good to go for AC.
-    // We can probably find a more elegant way to do this for Wayland
-    m_layerTreeContext.windowHandle = m_wlSurface->nativeWindowHandle() ? 1 : 0;
-#else
-    m_layerTreeContext.windowHandle = m_webPage->nativeWindowHandle();
+        // FIXME: We need a non-zero window handle so that webkit realizes we are good to go for AC.
+        // We can probably find a more elegant way to do this for Wayland
+        m_layerTreeContext.windowHandle = m_wlSurface->nativeWindowHandle() ? 1 : 0;
 #endif
+    } else
+        m_layerTreeContext.windowHandle = m_webPage->nativeWindowHandle();
 
     GLContext* context = glContext();
     if (!context)
@@ -246,9 +274,11 @@ void LayerTreeHostGtk::sizeDidChange(const IntSize& newSize)
         return;
     m_rootLayer->setSize(newSize);
 
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
-    wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), newSize.width(), newSize.height(), 0, 0);
+    if (m_displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+        wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), newSize.width(), newSize.height(), 0, 0);
 #endif
+    }
 
     // If the newSize exposes new areas of the non-composited content a setNeedsDisplay is needed
     // for those newly exposed areas.
@@ -335,10 +365,12 @@ gboolean LayerTreeHostGtk::layerFlushTimerFiredCallback(LayerTreeHostGtk* layerT
 
 void LayerTreeHostGtk::queueLayerFlush(unsigned interval)
 {
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
-    // Let the compositor know that we want to render a new frame
-    m_wlSurface->requestFrame();
+    if (m_displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+        // Let the compositor know that we want to render a new frame
+        m_wlSurface->requestFrame();
 #endif
+    }
     m_layerFlushTimerCallbackId = g_timeout_add_full(GDK_PRIORITY_EVENTS, interval, reinterpret_cast<GSourceFunc>(layerFlushTimerFiredCallback), this, 0);
     g_source_set_name_by_id(m_layerFlushTimerCallbackId, "[WebKit] layerFlushTimerFiredCallback");
 }

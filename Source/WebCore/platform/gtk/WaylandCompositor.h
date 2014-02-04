@@ -43,42 +43,60 @@
 #include <cairo.h>
 #include <cairo-gl.h>
 
+#include <wtf/HashMap.h>
+
 #include "GLContext.h"
 #include "IntSize.h"
 #include "RefPtrCairo.h"
 
 namespace WebCore {
 
-struct NestedSurface;
 class WaylandCompositor;
 
 // Nested compositor display
 struct NestedDisplay {
-  GdkDisplay* gdkDisplay;               // Gdk display
-  struct wl_display* wlDisplay;         // Main Wayland display
-  struct wl_display* childDisplay;      // Nested display
-  EGLDisplay eglDisplay;                // EGL display
-  EGLConfig eglConfig;                  // EGL configuration
-  EGLContext eglCtx;                    // EGL context
-  cairo_device_t* eglDevice;            // EGL cairo device
-  struct wl_global* wlGlobal;           // Wayland global
-  GSource* eventSource;                 // Display event source
+    GdkDisplay* gdkDisplay;               // Gdk display
+    struct wl_display* wlDisplay;         // Main Wayland display
+    struct wl_display* childDisplay;      // Nested display
+    EGLDisplay eglDisplay;                // EGL display
+    EGLConfig eglConfig;                  // EGL configuration
+    EGLContext eglCtx;                    // EGL context
+    cairo_device_t* eglDevice;            // EGL cairo device
+    struct wl_global* wlGlobal;           // Wayland display global
+    struct wl_global* wkgtkGlobal;        // Wayland webkitgtk interface global
+    GSource* eventSource;                 // Display event source
+};
+
+struct NestedBuffer {
+    struct wl_resource* resource;
+    struct wl_signal destroySignal;
+    struct wl_listener destroyListener;
+    uint32_t busyCount;
+};
+
+struct NestedBufferReference {
+    struct NestedBuffer* buffer;
+    struct wl_listener destroyListener;
 };
 
 // Nested Wayland compositor surface
 struct NestedSurface {
-  WaylandCompositor* compositor;        // Nested compositor instance
-  struct wl_resource* bufferResource;   // Last attached buffer
-  GLuint texture;                       // GL texture for the surface
-  EGLImageKHR* image;                   // EGL Image for texture
-  cairo_surface_t* cairoSurface;        // Cairo surface for GL texture
-  struct wl_list frameCallbackList;     // Pending frame callback list
+    WaylandCompositor* compositor;        // Nested compositor instance
+    struct NestedBuffer* buffer;          // Last attached buffer (pending buffer)
+    GLuint texture;                       // GL texture for the surface
+    EGLImageKHR* image;                   // EGL Image for texture
+    cairo_surface_t* cairoSurface;        // Cairo surface for GL texture
+    struct wl_list frameCallbackList;     // Pending frame callback list
+    GtkWidget* widget;                    // widget associated with this surface
+    struct wl_listener bufferDestroyListener; // Pending buffer destroy listener
+    struct NestedBufferReference bufferRef;   // Current buffer
+    struct wl_list link;
 };
 
 // List of pending frame callbacks on a nested surface
 struct NestedFrameCallback {
-  struct wl_resource* resource;
-  struct wl_list link;
+    struct wl_resource* resource;
+    struct wl_list link;
 };
 
 class WaylandCompositor {
@@ -88,8 +106,12 @@ public:
 
     // WebKit integration
     void addWidget(GtkWidget*);
-    void nextFrame();
+    int getWidgetId(GtkWidget*);
+    void nextFrame(GtkWidget*);
     cairo_surface_t* cairoSurfaceForWidget(GtkWidget*);
+
+    // Wayland Webkit extension interface
+    static void wkgtkSetSurfaceForWidget(struct wl_client*, struct wl_resource*, struct wl_resource*, uint32_t);
 
     // Wayland compositor interface
     static void createSurface(struct wl_client*, wl_resource*, uint32_t);
@@ -117,17 +139,33 @@ private:
     static void destroyNestedDisplay(struct NestedDisplay*);
     bool initialize();
 
-    // Wayland callbacks
+    // Global binding
+    static void wkgtkBind(struct wl_client*, void*, uint32_t, uint32_t);
     static void compositorBind(struct wl_client*, void*, uint32_t, uint32_t);
-    static void doDestroyNestedSurface(struct NestedSurface*);
-    static void destroyNestedSurface (struct wl_resource*);
-    static void destroyNestedFrameCallback (struct wl_resource*);
 
+    // Widget/Surface mapping
+    static struct NestedSurface* getSurfaceForWidget(WaylandCompositor*, GtkWidget*);
+    static void setSurfaceForWidget(WaylandCompositor*, GtkWidget*, struct NestedSurface*);
+    static GtkWidget* getWidgetById(WaylandCompositor*, int);
+
+    // Surface management
+    static void doDestroyNestedSurface(struct NestedSurface*);
+    static void destroyNestedSurface(struct wl_resource*);
+    static void destroyNestedFrameCallback(struct wl_resource*);
+
+    // Buffer management
+    static void nestedBufferDestroyHandler(struct wl_listener*, void*);
+    static struct NestedBuffer* nestedBufferFromResource(struct wl_resource*);
+    static void surfaceHandlePendingBufferDestroy(struct wl_listener*, void*);
+    static void nestedBufferReference(struct NestedBufferReference*, struct NestedBuffer*);
+    static void nestedBufferReferenceHandleDestroy(struct wl_listener*, void*);
+
+    // Global instance
     static WaylandCompositor* m_instance;
 
     struct NestedDisplay* m_display;
-    struct NestedSurface* m_surface;
-    GtkWidget* m_widget;
+    HashMap<GtkWidget*, struct NestedSurface*> m_widgetHashMap;
+    struct wl_list m_surfaces;
 };
 
 } // namespace WebCore

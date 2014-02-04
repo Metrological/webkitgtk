@@ -44,6 +44,9 @@ void WaylandDisplay::registryHandleGlobal(void *data, struct wl_registry *regist
     if (strcmp(interface, "wl_compositor") == 0)
         display->m_compositor =
             static_cast<struct wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 1));
+    else if (strcmp(interface, "wl_wkgtk") == 0)
+        display->m_wkgtk =
+            static_cast<struct wl_wkgtk*>(wl_registry_bind(registry, name, &wl_wkgtk_interface, 1));
 }
 
 void WaylandDisplay::registryHandleGlobalRemove(void *data, struct wl_registry *registry, uint32_t name)
@@ -82,11 +85,12 @@ WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
     wl_display_roundtrip(m_display);
 }
 
-PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height)
+PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, int widgetId)
 {
-    struct wl_surface *surface = wl_compositor_create_surface(m_compositor);
+    struct wl_surface* surface = wl_compositor_create_surface(m_compositor);
     EGLNativeWindowType native = wl_egl_window_create(surface, width, height);
     OwnPtr<WaylandSurface> wlSurface = WaylandSurface::create(surface, native);
+    wl_wkgtk_set_surface_for_widget(m_wkgtk, surface, widgetId);
     return wlSurface.release();
 }
 

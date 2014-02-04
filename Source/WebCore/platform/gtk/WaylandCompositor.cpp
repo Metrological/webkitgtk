@@ -31,6 +31,8 @@
 
 #include "WaylandDisplayEventSource.h"
 
+#include "WaylandWebkitGtkServerProtocol.h"
+
 #include <gdk/gdkwayland.h>
 
 namespace WebCore {
@@ -64,6 +66,67 @@ static const EGLenum gGLAPI = EGL_OPENGL_ES_API;
 #else
 static const EGLenum gGLAPI = EGL_OPENGL_API;
 #endif
+
+void WaylandCompositor::nestedBufferReferenceHandleDestroy(struct wl_listener* listener, void* data)
+{
+    struct NestedBufferReference* ref = 0;
+    ref = wl_container_of(listener, ref, destroyListener);
+    ref->buffer = 0;
+}
+
+void WaylandCompositor::nestedBufferReference(struct NestedBufferReference* ref, struct NestedBuffer* buffer)
+{
+    if (buffer == ref->buffer)
+        return;
+
+    if (ref->buffer) {
+        ref->buffer->busyCount--;
+        if (ref->buffer->busyCount == 0)
+            wl_resource_queue_event(ref->buffer->resource, WL_BUFFER_RELEASE);
+        wl_list_remove(&ref->destroyListener.link);
+    }
+
+    if (buffer) {
+        buffer->busyCount++;
+        wl_signal_add(&buffer->destroySignal, &ref->destroyListener);
+        ref->destroyListener.notify = nestedBufferReferenceHandleDestroy;
+    }
+
+    ref->buffer = buffer;
+}
+
+void WaylandCompositor::surfaceHandlePendingBufferDestroy(struct wl_listener* listener, void* data)
+{
+    struct NestedSurface* surface = 0;
+    surface = wl_container_of(listener, surface, bufferDestroyListener);
+    surface->buffer = 0;
+}
+
+void WaylandCompositor::nestedBufferDestroyHandler(struct wl_listener* listener, void* data)
+{
+    struct NestedBuffer* buffer = 0;
+    buffer = wl_container_of(listener, buffer, destroyListener);
+    wl_signal_emit(&buffer->destroySignal, buffer);
+    g_free(buffer);
+}
+
+struct NestedBuffer* WaylandCompositor::nestedBufferFromResource(struct wl_resource* resource)
+{
+    struct NestedBuffer* buffer;
+    struct wl_listener* listener;
+
+    listener = wl_resource_get_destroy_listener(resource, nestedBufferDestroyHandler);
+    if (listener)
+        return wl_container_of(listener, (struct NestedBuffer*)0, destroyListener);
+
+    buffer = g_new0(struct NestedBuffer, 1);
+    buffer->resource = resource;
+    wl_signal_init(&buffer->destroySignal);
+    buffer->destroyListener.notify = nestedBufferDestroyHandler;
+    wl_resource_add_destroy_listener(resource, &buffer->destroyListener);
+
+    return buffer;
+}
 
 bool WaylandCompositor::supportsRequiredExtensions(EGLDisplay eglDisplay)
 {
@@ -194,11 +257,12 @@ struct NestedDisplay* WaylandCompositor::createNestedDisplay()
 void WaylandCompositor::destroyNestedDisplay(struct NestedDisplay* display)
 {
     if (display->childDisplay) {
-        if (display->eventSource) {
+        if (display->eventSource)
             g_source_remove(g_source_get_id(display->eventSource));
-        }
         if (display->wlGlobal)
             wl_global_destroy(display->wlGlobal);
+        if (display->wkgtkGlobal)
+            wl_global_destroy(display->wkgtkGlobal);
         wl_display_destroy(display->childDisplay);
     }
     shutdownEGL(display);
@@ -219,12 +283,7 @@ void WaylandCompositor::surfaceDestroy(struct wl_client* client, struct wl_resou
 
 void WaylandCompositor::surfaceAttach(struct wl_client* client, struct wl_resource* resource, struct wl_resource* bufferResource, int32_t sx, int32_t sy)
 {
-    if (!bufferResource)
-        return;
-
     struct NestedSurface* surface = static_cast<struct NestedSurface*>(wl_resource_get_user_data(resource));
-    if (!surface)
-        return;
 
     EGLint format;
     WaylandCompositor* compositor = surface->compositor;
@@ -233,8 +292,17 @@ void WaylandCompositor::surfaceAttach(struct wl_client* client, struct wl_resour
     if (format != EGL_TEXTURE_RGB && format != EGL_TEXTURE_RGBA)
         return;
 
-    // We release buffer resources when processing pending frame callbacks (before the client can attach a new buffer)
-    surface->bufferResource = bufferResource;
+    // Remove references to any previous pending buffer for this surface
+    if (surface->buffer) {
+        surface->buffer = 0;
+        wl_list_remove(&surface->bufferDestroyListener.link);
+    }
+
+    // Make the new buffer the current pending buffer
+    if (bufferResource) {
+        surface->buffer = nestedBufferFromResource(bufferResource);
+        wl_signal_add(&surface->buffer->destroySignal, &surface->bufferDestroyListener);
+    }
 }
 
 void WaylandCompositor::surfaceDamage(struct wl_client* client, struct wl_resource* resource, int32_t x, int32_t y, int32_t w, int32_t h)
@@ -268,7 +336,7 @@ void WaylandCompositor::surfaceSetInputRegion(struct wl_client* client, struct w
 
 void WaylandCompositor::surfaceCommit(struct wl_client* client, struct wl_resource* resource)
 {
-    struct NestedSurface*surface = static_cast<struct NestedSurface*>(wl_resource_get_user_data(resource));
+    struct NestedSurface* surface = static_cast<struct NestedSurface*>(wl_resource_get_user_data(resource));
     if (!surface)
         return;
 
@@ -284,9 +352,12 @@ void WaylandCompositor::surfaceCommit(struct wl_client* client, struct wl_resour
         surface->cairoSurface = 0;
     }
 
+    // Make the pending buffer current 
+    nestedBufferReference(&surface->bufferRef, surface->buffer);
+
     // Create a new EGLImage from the last buffer attached to this surface
     EGLDisplay eglDisplay = compositor->m_display->eglDisplay;
-    surface->image = static_cast<EGLImageKHR*>(eglCreateImage(eglDisplay, EGL_NO_CONTEXT, EGL_WAYLAND_BUFFER_WL, surface->bufferResource, 0));
+    surface->image = static_cast<EGLImageKHR*>(eglCreateImage(eglDisplay, EGL_NO_CONTEXT, EGL_WAYLAND_BUFFER_WL, surface->buffer->resource, 0));
     if (surface->image == EGL_NO_IMAGE_KHR)
         return;
 
@@ -296,15 +367,21 @@ void WaylandCompositor::surfaceCommit(struct wl_client* client, struct wl_resour
 
     // Create a new cairo surface associated with the surface texture
     int width, height;
-    eglQueryBuffer(eglDisplay, surface->bufferResource, EGL_WIDTH, &width);
-    eglQueryBuffer(eglDisplay, surface->bufferResource, EGL_HEIGHT, &height);
+    eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_WIDTH, &width);
+    eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height);
     cairo_device_t* device = compositor->m_display->eglDevice;
     surface->cairoSurface = cairo_gl_surface_create_for_texture(device, CAIRO_CONTENT_COLOR_ALPHA, surface->texture, width, height);
     cairo_surface_mark_dirty (surface->cairoSurface); // FIXME: Why do we need this?
 
+    // We are done with this buffer
+    if (surface->buffer) {
+        wl_list_remove(&surface->bufferDestroyListener.link);
+        surface->buffer = 0;
+    }
+
     // Redraw the widget backed by this surface
-    if (compositor->m_widget)
-        gtk_widget_queue_draw(compositor->m_widget);
+    if (surface->widget)
+        gtk_widget_queue_draw(surface->widget);
 }
 
 void WaylandCompositor::surfaceSetBufferTransform(struct wl_client* client, struct wl_resource* resource, int32_t transform)
@@ -337,23 +414,20 @@ void WaylandCompositor::doDestroyNestedSurface(struct NestedSurface* surface)
         wl_resource_destroy(cb->resource);
     wl_list_init(&surface->frameCallbackList);
 
-    // Release last attached buffer
-    if (surface->bufferResource) {
-        // FIXME: queing a buffer release here can produce segfault in some scnearios,
-        // but are we not leaking the buffer otherwise? We might need some more
-        // elaborate mechanism to release the buffer (see nested example in weston)
-        // wl_resource_queue_event(surface->bufferResource, WL_BUFFER_RELEASE);
-        surface->bufferResource = 0;
-    }
-
     // Destroy EGLImage
     if (surface->image != EGL_NO_IMAGE_KHR) {
         eglDestroyImage(surface->compositor->m_display->eglDisplay, surface->image);
         surface->image = 0;
     }
 
+    // Release current buffer
+    nestedBufferReference(&surface->bufferRef, NULL);
+
     // Delete GL texture
     glDeleteTextures(1, &surface->texture);
+
+    // Unlink this source from the compositor's surface list
+    wl_list_remove(&surface->link);
 
     g_free(surface);
 }
@@ -369,14 +443,11 @@ void WaylandCompositor::createSurface(struct wl_client* client, struct wl_resour
 {
     WaylandCompositor* compositor = static_cast<WaylandCompositor*>(wl_resource_get_user_data(resource));
 
-    // FIXME: For now we only support one surface/widget
-    if (compositor->m_surface) {
-        g_warning("Nested Wayland compositor only supports one surface.");
-    }
-
     struct NestedSurface* surface = g_new0(struct NestedSurface, 1);
     surface->compositor = compositor;
+
     wl_list_init(&surface->frameCallbackList);
+    surface->bufferDestroyListener.notify = surfaceHandlePendingBufferDestroy;
 
     // Create a GL texture to back this surface
     glGenTextures (1, &surface->texture);
@@ -390,8 +461,7 @@ void WaylandCompositor::createSurface(struct wl_client* client, struct wl_resour
     struct wl_resource* surfaceResource = wl_resource_create(client, &wl_surface_interface, 1, id);
     wl_resource_set_implementation(surfaceResource, &surfaceInterface, surface, destroyNestedSurface);
 
-    // FIXME: For now we only support one surface/widget
-    compositor->m_surface = surface;
+    wl_list_insert(compositor->m_surfaces.prev, &surface->link);
 }
 
 void WaylandCompositor::createRegion(struct wl_client* client, struct wl_resource* resource, uint32_t id)
@@ -409,6 +479,28 @@ void WaylandCompositor::compositorBind(wl_client* client, void* data, uint32_t v
     WaylandCompositor* compositor = static_cast<WaylandCompositor*>(data);
     struct wl_resource* resource = wl_resource_create(client, &wl_compositor_interface, std::min(static_cast<int>(version), 3), id);
     wl_resource_set_implementation(resource, &compositorInterface, compositor, 0);
+}
+
+void WaylandCompositor::wkgtkSetSurfaceForWidget(struct wl_client* client, struct wl_resource* resource, struct wl_resource* surfaceResource, uint32_t id)
+{
+    WaylandCompositor* compositor = static_cast<WaylandCompositor*>(wl_resource_get_user_data(resource));
+    GtkWidget* widget = getWidgetById(compositor, id);
+    if (!widget)
+        return;
+    struct NestedSurface* surface = static_cast<struct NestedSurface*>(wl_resource_get_user_data(surfaceResource));
+    setSurfaceForWidget(compositor, widget, surface);
+}
+
+static const struct wl_wkgtk_interface wkgtkInterface = {
+    WaylandCompositor::wkgtkSetSurfaceForWidget,
+};
+
+
+void WaylandCompositor::wkgtkBind(struct wl_client* client, void* data, uint32_t version, uint32_t id)
+{
+    WaylandCompositor* compositor = static_cast<WaylandCompositor*>(data);;
+    struct wl_resource* resource = wl_resource_create(client, &wl_wkgtk_interface, 1, id);
+    wl_resource_set_implementation(resource, &wkgtkInterface, compositor, 0);
 }
 
 bool WaylandCompositor::initialize()
@@ -433,6 +525,13 @@ bool WaylandCompositor::initialize()
     m_display->wlGlobal = wl_global_create(m_display->childDisplay, &wl_compositor_interface, wl_compositor_interface.version, this, compositorBind);
     if (!m_display->wlGlobal) {
         g_warning("Nested Wayland compositor could not register display global");
+        return false;
+    }
+
+    // Bind the webkitgtk protocol extension
+    m_display->wkgtkGlobal = wl_global_create(m_display->childDisplay, &wl_wkgtk_interface, 1, this, wkgtkBind);
+    if (!m_display->wkgtkGlobal) {
+        g_warning("Nested Wayland compositor could not register webkitgtk global");
         return false;
     }
 
@@ -466,62 +565,78 @@ WaylandCompositor* WaylandCompositor::instance()
 
 WaylandCompositor::WaylandCompositor()
     : m_display(0)
-    , m_surface(0)
-    , m_widget(0)
 {
+    wl_list_init(&m_surfaces);
 }
 
 WaylandCompositor::~WaylandCompositor()
 {
-    if (m_surface)
-        doDestroyNestedSurface(m_surface);
+    struct NestedSurface *surface, *next;
+    wl_list_for_each_safe(surface, next, &m_surfaces, link)
+        doDestroyNestedSurface(surface);
+    wl_list_init(&m_surfaces);
 
     if (m_display)
         destroyNestedDisplay(m_display);
 }
 
-// FIXME: For now we only support one widget/surface, in the future
-// we should be able to map multiple widgets to multiple surfaces
 void WaylandCompositor::addWidget(GtkWidget* widget)
 {
-    if (m_widget)
-        g_warning("Nested Wayland compositor only supports one widget.");
-    m_widget = widget;
+    static int nextWidgetId = 0;
+    g_object_set_data(G_OBJECT(widget), "wayland-compositor-widget-id", GINT_TO_POINTER(++nextWidgetId));
+    setSurfaceForWidget(this, widget, 0);
 }
 
-// FIXME: For now we only support one widget/surface, in the future
-// we should be able to map multiple widgets to multiple surfaces
-cairo_surface_t* WaylandCompositor::cairoSurfaceForWidget(GtkWidget *widget)
+int WaylandCompositor::getWidgetId(GtkWidget* widget)
 {
-    if (widget != m_widget || !m_surface)
-        return 0;
-    return m_surface->cairoSurface;
+    return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id"));
 }
 
-void WaylandCompositor::nextFrame()
+struct NestedSurface* WaylandCompositor::getSurfaceForWidget(WaylandCompositor* compositor, GtkWidget* widget)
 {
-    if (!m_surface)
+    return compositor->m_widgetHashMap.get(widget);
+}
+
+void WaylandCompositor::setSurfaceForWidget(WaylandCompositor* compositor, GtkWidget* widget, struct NestedSurface* surface)
+{
+    // Associate the new surface with the widget, the client is responsible
+    // for destroying any previous surface created for this widget
+    compositor->m_widgetHashMap.set(widget, surface);
+    if (surface)
+        surface->widget = widget;
+}
+
+GtkWidget* WaylandCompositor::getWidgetById(WaylandCompositor* compositor, int id)
+{
+    for (HashMap<GtkWidget*, struct NestedSurface*>::iterator it = compositor->m_widgetHashMap.begin(); it != compositor->m_widgetHashMap.end(); ++it) {
+        GtkWidget* widget = it->key;
+        if (id == GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id")))
+            return widget;
+    }
+    return 0;
+}
+
+cairo_surface_t* WaylandCompositor::cairoSurfaceForWidget(GtkWidget* widget)
+{
+    struct NestedSurface* surface = getSurfaceForWidget(this, widget);
+    return surface ? surface->cairoSurface : 0;
+}
+
+void WaylandCompositor::nextFrame(GtkWidget* widget)
+{
+    struct NestedSurface* surface = getSurfaceForWidget(this, widget);
+    if (!surface)
         return;
-
-    // FIXME: When we support multiple surfaces/widgets we probably want to request
-    // the next frame for a specific widget only so we can throttle frame callbacks
-    // for that surface alone
 
     // Process frame callbacks for the surface
     struct NestedFrameCallback *nc, *next;
-    wl_list_for_each_safe (nc, next, &m_surface->frameCallbackList, link) {
-        wl_callback_send_done (nc->resource, 0);
-        wl_resource_destroy (nc->resource);
+    wl_list_for_each_safe(nc, next, &surface->frameCallbackList, link) {
+        wl_callback_send_done(nc->resource, 0);
+        wl_resource_destroy(nc->resource);
     }
 
-    wl_list_init (&m_surface->frameCallbackList);
-    wl_display_flush_clients (m_display->childDisplay);
-
-    // Release the last buffer attached for this surface
-    if (m_surface->bufferResource) {
-        wl_resource_queue_event (m_surface->bufferResource, WL_BUFFER_RELEASE);
-        m_surface->bufferResource = 0;
-    }
+    wl_list_init(&surface->frameCallbackList);
+    wl_display_flush_clients(m_display->childDisplay);
 }
 
 } // namespace WebCore

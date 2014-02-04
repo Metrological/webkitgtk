@@ -494,7 +494,7 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
     if (displayType == DISPLAY_TYPE_WAYLAND) {
-        priv->waylandCompositor->nextFrame();
+        priv->waylandCompositor->nextFrame(GTK_WIDGET(webViewBase));
     }
 #endif
 
@@ -1042,9 +1042,19 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, WebCon
     priv->pageProxy = context->createWebPage(*priv->pageClient, std::move(webPageConfiguration));
     priv->pageProxy->initializeWebPage();
 
-#if USE(TEXTURE_MAPPER_GL) && defined(GDK_WINDOWING_X11)
-    if (priv->redirectedWindow)
-        priv->pageProxy->setAcceleratedCompositingWindowId(priv->redirectedWindow->windowId());
+#if USE(TEXTURE_MAPPER_GL)
+    DisplayType displayType = getDisplayType();
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+        if (priv->waylandCompositor)
+            priv->pageProxy->setAcceleratedCompositingWindowId(priv->waylandCompositor->getWidgetId(GTK_WIDGET(webkitWebViewBase)));
+#endif
+    } else {
+#if defined(GDK_WINDOWING_X11)
+        if (priv->redirectedWindow)
+            priv->pageProxy->setAcceleratedCompositingWindowId(priv->redirectedWindow->windowId());
+#endif
+    }
 #endif
 
     webkitWebViewBaseUpdatePreferences(webkitWebViewBase);

@@ -36,6 +36,7 @@
 #include <wayland-client.h>
 
 #include "WaylandSurface.h"
+#include "WaylandWebkitGtkClientProtocol.h"
 
 namespace WebCore {
 
@@ -49,7 +50,7 @@ public:
     static void registryHandleGlobalRemove(void*, struct wl_registry*, uint32_t);
 
     // Display interface
-    PassOwnPtr<WaylandSurface> createSurface(int, int);
+    PassOwnPtr<WaylandSurface> createSurface(int, int, int);
     void destroySurface(WaylandSurface*);
     struct wl_display* nativeDisplay() { return m_display; }
 
@@ -62,6 +63,7 @@ private:
     struct wl_display* m_display;
     struct wl_registry* m_registry;
     struct wl_compositor* m_compositor;
+    struct wl_wkgtk* m_wkgtk;
 };
 
 }

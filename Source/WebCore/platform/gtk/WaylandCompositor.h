@@ -106,8 +106,8 @@ public:
 
     // WebKit integration
     void addWidget(GtkWidget*);
+    void removeWidget(GtkWidget*);
     int getWidgetId(GtkWidget*);
-    void nextFrame(GtkWidget*);
     cairo_surface_t* cairoSurfaceForWidget(GtkWidget*);
 
     // Wayland Webkit extension interface

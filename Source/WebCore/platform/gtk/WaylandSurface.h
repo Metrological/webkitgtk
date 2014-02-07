@@ -45,13 +45,9 @@ public:
     static PassOwnPtr<WaylandSurface> create(struct wl_surface*, EGLNativeWindowType);
     virtual ~WaylandSurface();
 
-    // Wayland surface interface callbacks
-    static void frameCallback(void*, struct wl_callback*, uint32_t);
-
     // Surface interface
     EGLNativeWindowType nativeWindowHandle() { return m_native; }
     struct wl_surface* surface() { return m_surface; }
-    void requestFrame();
 
 private:
     WaylandSurface(struct wl_surface*, EGLNativeWindowType);

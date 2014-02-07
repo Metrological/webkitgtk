@@ -492,12 +492,6 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
         cairo_fill(cr);
     }
 
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
-    if (displayType == DISPLAY_TYPE_WAYLAND) {
-        priv->waylandCompositor->nextFrame(GTK_WIDGET(webViewBase));
-    }
-#endif
-
     return true;
 }
 #endif
@@ -952,7 +946,10 @@ static void webkitWebViewBaseDestroy(GtkWidget* widget)
     WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(widget)->priv;
     if (priv->authenticationDialog)
         gtk_widget_destroy(priv->authenticationDialog);
-
+#if USE(TEXTURE_MAPPER_GL) && USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    if (priv->waylandCompositor)
+        priv->waylandCompositor->removeWidget(widget);
+#endif
     GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->destroy(widget);
 }
 

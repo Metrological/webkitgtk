@@ -33,23 +33,6 @@
 
 namespace WebCore {
 
-void WaylandSurface::frameCallback(void* data, struct wl_callback* callback, uint32_t time)
-{
-    // FIXME: Looks like this is never called. Why?
-    if (callback)
-        wl_callback_destroy(callback);
-}
-
-static const struct wl_callback_listener frameListener = {
-    WaylandSurface::frameCallback
-};
-
-void WaylandSurface::requestFrame()
-{
-    struct wl_callback* wlCallback = wl_surface_frame(m_surface);
-    wl_callback_add_listener(wlCallback, &frameListener, this);
-}
-
 PassOwnPtr<WaylandSurface> WaylandSurface::create(struct wl_surface* surface, EGLNativeWindowType native)
 {
     return adoptPtr(new WaylandSurface(surface, native));

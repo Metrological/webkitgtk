@@ -163,14 +163,11 @@ void LayerTreeHostGtk::initialize()
     if (m_displayType == DISPLAY_TYPE_WAYLAND) {
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
         // Request a wayland surface from the nested wayland compositor
+        IntSize webPageSize = m_webPage->size();
         WaylandDisplay* display = WaylandDisplay::instance();
-        m_wlSurface = display->createSurface(1, 1, m_webPage->nativeWindowHandle());
+        m_wlSurface = display->createSurface(webPageSize.width(), webPageSize.height(), m_webPage->nativeWindowHandle());
         if (!m_wlSurface)
             return;
-
-        // Resize the surface to match the size of the web page
-        IntSize webPageSize = m_webPage->size();
-        wl_egl_window_resize(m_wlSurface->nativeWindowHandle(), webPageSize.width(), webPageSize.height(), 0, 0);
 #endif
     }
 
@@ -366,12 +363,6 @@ gboolean LayerTreeHostGtk::layerFlushTimerFiredCallback(LayerTreeHostGtk* layerT
 
 void LayerTreeHostGtk::queueLayerFlush(unsigned interval)
 {
-    if (m_displayType == DISPLAY_TYPE_WAYLAND) {
-#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
-        // Let the compositor know that we want to render a new frame
-        m_wlSurface->requestFrame();
-#endif
-    }
     m_layerFlushTimerCallbackId = g_timeout_add_full(GDK_PRIORITY_EVENTS, interval, reinterpret_cast<GSourceFunc>(layerFlushTimerFiredCallback), this, 0);
     g_source_set_name_by_id(m_layerFlushTimerCallbackId, "[WebKit] layerFlushTimerFiredCallback");
 }

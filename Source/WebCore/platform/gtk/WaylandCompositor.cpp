@@ -316,8 +316,6 @@ void WaylandCompositor::surfaceFrame(struct wl_client* client, struct wl_resourc
     if (!surface)
         return;
 
-    // Queue frame callback until we are done with the current frame and are ready to process the next one
-    // (see nextFrame)
     struct NestedFrameCallback* callback = g_new0(struct NestedFrameCallback, 1);
     callback->resource = wl_resource_create(client, &wl_callback_interface, 1, id);
     wl_resource_set_implementation(callback->resource, 0, callback, destroyNestedFrameCallback);
@@ -382,6 +380,15 @@ void WaylandCompositor::surfaceCommit(struct wl_client* client, struct wl_resour
     // Redraw the widget backed by this surface
     if (surface->widget)
         gtk_widget_queue_draw(surface->widget);
+
+    // Process frame callbacks for this surface so the client can render a new frame
+    struct NestedFrameCallback *nc, *next;
+    wl_list_for_each_safe(nc, next, &surface->frameCallbackList, link) {
+        wl_callback_send_done(nc->resource, 0);
+        wl_resource_destroy(nc->resource);
+    }
+    wl_list_init(&surface->frameCallbackList);
+    wl_display_flush_clients(surface->compositor->m_display->childDisplay);
 }
 
 void WaylandCompositor::surfaceSetBufferTransform(struct wl_client* client, struct wl_resource* resource, int32_t transform)
@@ -587,6 +594,19 @@ void WaylandCompositor::addWidget(GtkWidget* widget)
     setSurfaceForWidget(this, widget, 0);
 }
 
+void WaylandCompositor::removeWidget(GtkWidget* widget)
+{
+    struct NestedSurface* surface = getSurfaceForWidget(this, widget);
+    if (surface)
+        surface->widget = 0;
+
+    int widgetId = getWidgetId(widget);
+    if (widgetId) {
+        m_widgetHashMap.remove(widget);
+        g_object_steal_data(G_OBJECT(widget), "wayland-compositor-widget-id");
+    }
+}
+
 int WaylandCompositor::getWidgetId(GtkWidget* widget)
 {
     return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id"));
@@ -620,23 +640,6 @@ cairo_surface_t* WaylandCompositor::cairoSurfaceForWidget(GtkWidget* widget)
 {
     struct NestedSurface* surface = getSurfaceForWidget(this, widget);
     return surface ? surface->cairoSurface : 0;
-}
-
-void WaylandCompositor::nextFrame(GtkWidget* widget)
-{
-    struct NestedSurface* surface = getSurfaceForWidget(this, widget);
-    if (!surface)
-        return;
-
-    // Process frame callbacks for the surface
-    struct NestedFrameCallback *nc, *next;
-    wl_list_for_each_safe(nc, next, &surface->frameCallbackList, link) {
-        wl_callback_send_done(nc->resource, 0);
-        wl_resource_destroy(nc->resource);
-    }
-
-    wl_list_init(&surface->frameCallbackList);
-    wl_display_flush_clients(m_display->childDisplay);
 }
 
 } // namespace WebCore

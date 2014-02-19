@@ -42,13 +42,14 @@ bool PluginPackage::load()
     return false;
 }
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
 uint16_t PluginPackage::NPVersion() const
 {
     return 0;
 }
-#endif
 
+// FIXME: The EFL port doesn't build PluginPackage.cpp when ENABLE_NETSCAPE_PLUGIN_API
+// is disabled, so these stub implementations are placed here.
+#if !ENABLE(NETSCAPE_PLUGIN_API)
 PassRefPtr<PluginPackage> PluginPackage::createPackage(const String&, const time_t&)
 {
     return 0;
@@ -72,5 +73,6 @@ int PluginPackage::compare(const PluginPackage&) const
 PluginPackage::~PluginPackage()
 {
 }
+#endif // !ENABLE(NETSCAPE_PLUGIN_API)
 
 }

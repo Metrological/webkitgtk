@@ -501,11 +501,6 @@ if test "$enable_webkit2" = "yes"; then
         AC_MSG_ERROR([WebKit2 requires GTK+ 3.x, use --with-gtk=3.0])
     fi
 
-    # Make sure we have GTK+ 2.x to build the plugin process.
-    PKG_CHECK_MODULES(GTK2, gtk+-2.0 >= gtk2_required_version)
-    AC_SUBST(GTK2_CFLAGS)
-    AC_SUBST(GTK2_LIBS)
-
     # Check Unix printing
     PKG_CHECK_MODULES(GTK_UNIX_PRINTING, gtk+-unix-print-3.0, [have_gtk_unix_printing=yes], [have_gtk_unix_printing=no])
     AC_SUBST(GTK_UNIX_PRINTING_CFLAGS)

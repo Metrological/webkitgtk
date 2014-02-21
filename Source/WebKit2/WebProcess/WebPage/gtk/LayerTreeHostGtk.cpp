@@ -49,14 +49,12 @@
 #include <wtf/CurrentTime.h>
 
 #include <gdk/gdk.h>
-#if defined(GDK_WINDOWING_WAYLAND)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 #include <gdk/gdkwayland.h>
-#if USE(EGL) && PLATFORM(WAYLAND)
 #include "WaylandDisplay.h"
 #endif
-#endif
 
-#if defined(GDK_WINDOWING_X11)
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 #define Region XRegion
 #define Font XFont
 #define Cursor XCursor
@@ -99,11 +97,11 @@ LayerTreeHostGtk::LayerTreeHostGtk(WebPage* webPage)
 int LayerTreeHostGtk::getDisplayType()
 {
     GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
-#if defined(GDK_WINDOWING_WAYLAND)
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
     if (GDK_IS_WAYLAND_DISPLAY(display))
         return DISPLAY_TYPE_WAYLAND;
 #endif
-#if defined(GDK_WINDOWING_X11)
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
     if (GDK_IS_X11_DISPLAY(display))
         return DISPLAY_TYPE_X11;
 #endif

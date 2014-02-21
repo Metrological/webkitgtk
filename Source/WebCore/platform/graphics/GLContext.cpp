@@ -37,7 +37,7 @@
 
 #if PLATFORM(GTK)
 #include <gdk/gdk.h>
-#if defined(GDK_WINDOWING_X11)
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 #include <gdk/gdkx.h>
 #endif
 #if PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2) && defined(GDK_WINDOWING_WAYLAND)

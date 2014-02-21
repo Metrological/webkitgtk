@@ -309,11 +309,6 @@ if test "$enable_webgl" != "no"; then
     fi
 fi
 
-if test "$enable_x11_target" != "yes" && test "$enable_wayland_target" = "yes" && test "enable_accelerated_compositing" != "no"; then
-    AC_MSG_WARN([Accelerated compositing for Wayland is not yet implemented, disabling due to the Wayland-only target.])
-    enable_accelerated_compositing=no
-fi
-
 if test "$enable_accelerated_compositing" != "no"; then
     if test "$found_opengl" = "yes"; then
         enable_accelerated_compositing=yes

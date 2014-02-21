@@ -6,6 +6,22 @@
   <!-- This file contains a set of modules to set up an enviroment for wayland support. -->
   <repository type="tarball" name="ftp.gnome.org"
       href="http://ftp.gnome.org"/>
+  <repository type="tarball" name="cairographics.org"
+      href="http://cairographics.org"/>
+
+  <autotools id="cairo" autogen-sh="configure"
+             autogenargs="--enable-glesv2=yes --enable-egl=yes"
+             makeargs="CFLAGS=-fno-lto CXXFLAGS=-fno-lto LDFLAGS=-fno-lto">
+    <dependencies>
+      <dep package="fontconfig"/>
+      <dep package="pixman"/>
+      <dep package="glib"/>
+    </dependencies>
+    <branch module="releases/cairo-1.12.16.tar.xz" version="1.12.16"
+            repo="cairographics.org"
+            hash="sha256:2505959eb3f1de3e1841023b61585bfd35684b9733c7b6a3643f4f4cbde6d846">
+    </branch>
+  </autotools>
 
   <autotools id="gdk-pixbuf" autogen-sh="configure"
              autogenargs="--disable-introspection">
@@ -25,9 +41,9 @@
       <dep package="at-spi2-atk"/>
       <dep package="gdk-pixbuf"/>
     </dependencies>
-    <branch module="/pub/GNOME/sources/gtk+/3.10/gtk+-3.10.0.tar.xz" version="3.10.0"
+    <branch module="/pub/GNOME/sources/gtk+/3.11/gtk+-3.11.5.tar.xz" version="3.11.5"
             repo="ftp.gnome.org"
-            hash="sha256:6559feb360cd935d341cd7a0b69a72f8f4346ed6ee9b7c4040c02b73b75c53fe"/>
+            hash="sha256:bcb0accddcb05bb452fa5b1f071ee0a95dfde9737107b315263d6dec522893ae"/>
   </autotools>
 
   <autotools id="glib"
@@ -36,8 +52,8 @@
     <dependencies>
       <dep package="libffi"/>
     </dependencies>
-    <branch module="/pub/GNOME/sources/glib/2.37/glib-2.37.6.tar.xz" version="2.37.6"
+    <branch module="/pub/GNOME/sources/glib/2.39/glib-2.39.90.tar.xz" version="2.39.90"
             repo="ftp.gnome.org"
-            hash="sha256:01e1de3179cc58dafc0c950363530fccdefc6dda32a25aed96dd24dc23b83165"/>
+            hash="sha256:ed48a37aebc66bafe63c8b8e62c746b888a20da3ffaf77641cc9c87acb54eb33"/>
   </autotools>
 </moduleset>

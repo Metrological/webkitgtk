@@ -59,10 +59,13 @@
 #include <WebCore/NotImplemented.h>
 #include <WebCore/PasteboardHelper.h>
 #include <WebCore/RefPtrCairo.h>
-#include <WebCore/Region.h>
 #include <gdk/gdk.h>
+#include <WebCore/Region.h>
 #include <gdk/gdkkeysyms.h>
-#ifdef GDK_WINDOWING_X11
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+#include <gdk/gdkwayland.h>
+#endif
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 #include <gdk/gdkx.h>
 #endif
 #include <wtf/HashMap.h>
@@ -73,8 +76,13 @@
 #include "WebFullScreenManagerProxy.h"
 #endif
 
-#if USE(TEXTURE_MAPPER_GL) && defined(GDK_WINDOWING_X11)
+#if USE(TEXTURE_MAPPER_GL)
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 #include <WebCore/RedirectedXCompositeWindow.h>
+#endif
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+#include <WebCore/WaylandCompositor.h>
+#endif
 #endif
 
 using namespace WebKit;
@@ -82,7 +90,7 @@ using namespace WebCore;
 
 typedef HashMap<GtkWidget*, IntRect> WebKitWebViewChildrenMap;
 
-#if USE(TEXTURE_MAPPER_GL)
+#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 void redirectedWindowDamagedCallback(void* data);
 #endif
 
@@ -133,11 +141,36 @@ struct _WebKitWebViewBasePrivate {
 #endif
 
 #if USE(TEXTURE_MAPPER_GL)
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    WaylandCompositor* waylandCompositor;
+#endif
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
     OwnPtr<RedirectedXCompositeWindow> redirectedWindow;
+#endif
 #endif
 };
 
+enum DisplayType {
+  DISPLAY_TYPE_NONE = 0,
+  DISPLAY_TYPE_X11,
+  DISPLAY_TYPE_WAYLAND
+};
+
 WEBKIT_DEFINE_TYPE(WebKitWebViewBase, webkit_web_view_base, GTK_TYPE_CONTAINER)
+
+static DisplayType getDisplayType()
+{
+    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+    if (GDK_IS_WAYLAND_DISPLAY(display))
+        return DISPLAY_TYPE_WAYLAND;
+#endif
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+    if (GDK_IS_X11_DISPLAY(display))
+        return DISPLAY_TYPE_X11;
+#endif
+    return DISPLAY_TYPE_NONE;
+}
 
 static void webkitWebViewBaseNotifyResizerSize(WebKitWebViewBase* webViewBase)
 {
@@ -408,13 +441,20 @@ static void webkitWebViewBaseConstructed(GObject* object)
     WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(object)->priv;
     priv->pageClient = PageClientImpl::create(viewWidget);
     priv->dragAndDropHelper.setWidget(viewWidget);
-
-#if USE(TEXTURE_MAPPER_GL) && defined(GDK_WINDOWING_X11)
-    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
-    if (GDK_IS_X11_DISPLAY(display)) {
+#if USE(TEXTURE_MAPPER_GL)
+    DisplayType displayType = getDisplayType();
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+        priv->waylandCompositor = WaylandCompositor::instance();
+        if (priv->waylandCompositor)
+            priv->waylandCompositor->addWidget(viewWidget);
+#endif
+    } else if (displayType = DISPLAY_TYPE_X11) {
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
         priv->redirectedWindow = RedirectedXCompositeWindow::create(IntSize(1, 1), RedirectedXCompositeWindow::DoNotCreateGLContext);
         if (priv->redirectedWindow)
             priv->redirectedWindow->setDamageNotifyCallback(redirectedWindowDamagedCallback, object);
+#endif
     }
 #endif
 
@@ -429,14 +469,29 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
 
     // To avoid flashes when initializing accelerated compositing for the first
     // time, we wait until we know there's a frame ready before rendering.
+    cairo_surface_t* surface = NULL;
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
-    if (!priv->redirectedWindow)
-        return false;
+    DisplayType displayType = getDisplayType();
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+        if (!priv->waylandCompositor)
+            return false;
+        surface = priv->waylandCompositor->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+#endif
+    } else if (displayType == DISPLAY_TYPE_X11) {
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+        if (!priv->redirectedWindow)
+            return false;
+        surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+#endif
+    }
 
-    cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
-    cairo_surface_t* surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
-    cairo_set_source_surface(cr, surface, 0, 0);
-    cairo_fill(cr);
+    if (surface) {
+        cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
+        cairo_set_source_surface(cr, surface, 0, 0);
+        cairo_fill(cr);
+    }
+
     return true;
 }
 #endif
@@ -529,7 +584,7 @@ static void resizeWebKitWebViewBaseFromAllocation(WebKitWebViewBase* webViewBase
         gtk_widget_size_allocate(priv->authenticationDialog, &childAllocation);
     }
 
-#if USE(TEXTURE_MAPPER_GL)
+#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
     if (sizeChanged && webViewBase->priv->redirectedWindow)
         webViewBase->priv->redirectedWindow->resize(viewRect.size());
 #endif
@@ -891,7 +946,10 @@ static void webkitWebViewBaseDestroy(GtkWidget* widget)
     WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(widget)->priv;
     if (priv->authenticationDialog)
         gtk_widget_destroy(priv->authenticationDialog);
-
+#if USE(TEXTURE_MAPPER_GL) && USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    if (priv->waylandCompositor)
+        priv->waylandCompositor->removeWidget(widget);
+#endif
     GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->destroy(widget);
 }
 
@@ -958,8 +1016,14 @@ void webkitWebViewBaseUpdatePreferences(WebKitWebViewBase* webkitWebViewBase)
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
 
 #if USE(TEXTURE_MAPPER_GL)
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
     if (priv->redirectedWindow)
         return;
+#endif
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    if (priv->waylandCompositor)
+        return;
+#endif
 #endif
 
     priv->pageProxy->pageGroup().preferences()->setAcceleratedCompositingEnabled(false);
@@ -976,8 +1040,18 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, WebCon
     priv->pageProxy->initializeWebPage();
 
 #if USE(TEXTURE_MAPPER_GL)
-    if (priv->redirectedWindow)
-        priv->pageProxy->setAcceleratedCompositingWindowId(priv->redirectedWindow->windowId());
+    DisplayType displayType = getDisplayType();
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+        if (priv->waylandCompositor)
+            priv->pageProxy->setAcceleratedCompositingWindowId(priv->waylandCompositor->getWidgetId(GTK_WIDGET(webkitWebViewBase)));
+#endif
+    } else {
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+        if (priv->redirectedWindow)
+            priv->pageProxy->setAcceleratedCompositingWindowId(priv->redirectedWindow->windowId());
+#endif
+    }
 #endif
 
     webkitWebViewBaseUpdatePreferences(webkitWebViewBase);
@@ -1118,7 +1192,7 @@ GdkEvent* webkitWebViewBaseTakeContextMenuEvent(WebKitWebViewBase* webkitWebView
     return webkitWebViewBase->priv->contextMenuEvent.release();
 }
 
-#if USE(TEXTURE_MAPPER_GL)
+#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 void redirectedWindowDamagedCallback(void* data)
 {
     gtk_widget_queue_draw(GTK_WIDGET(data));

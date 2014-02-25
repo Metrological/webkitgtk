@@ -35,6 +35,16 @@
 #include "OpenGLShims.h"
 #endif
 
+#if PLATFORM(GTK)
+#include <gdk/gdk.h>
+#if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+#include <gdk/gdkx.h>
+#endif
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+#include <gdk/gdkwayland.h>
+#endif
+#endif
+
 #if ENABLE(ACCELERATED_2D_CANVAS)
 #include <cairo-gl.h>
 #endif
@@ -54,10 +64,26 @@ static EGLDisplay sharedEGLDisplay()
     static bool initialized = false;
     if (!initialized) {
         initialized = true;
+#if PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
+    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
+#if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+    if (GDK_IS_WAYLAND_DISPLAY(display))
+        gSharedEGLDisplay = eglGetDisplay(GLContext::sharedWaylandDisplay());
+#endif
+    // Can't have X11 path go through EGL when we are building also for Wayland
+    // target, must use GLX to create the context in that case
+#if !PLATFORM(WAYLAND) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+    if (GDK_IS_X11_DISPLAY(display))
+        gSharedEGLDisplay = eglGetDisplay(GLContext::sharedX11Display());
+#endif
+    if (gSharedEGLDisplay == EGL_NO_DISPLAY)
+        gSharedEGLDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+#else // PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
 #if PLATFORM(X11)
         gSharedEGLDisplay = eglGetDisplay(GLContext::sharedX11Display());
 #else
         gSharedEGLDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+#endif
 #endif
         if (gSharedEGLDisplay != EGL_NO_DISPLAY && (!eglInitialize(gSharedEGLDisplay, 0, 0) || !eglBindAPI(gGLAPI)))
             gSharedEGLDisplay = EGL_NO_DISPLAY;
@@ -124,7 +150,6 @@ PassOwnPtr<GLContextEGL> GLContextEGL::createWindowContext(EGLNativeWindowType w
     EGLSurface surface = eglCreateWindowSurface(display, config, window, 0);
     if (surface == EGL_NO_SURFACE)
         return nullptr;
-
     return adoptPtr(new GLContextEGL(context, surface, WindowSurface));
 }
 
@@ -154,7 +179,9 @@ PassOwnPtr<GLContextEGL> GLContextEGL::createPbufferContext(EGLContext sharingCo
 
 PassOwnPtr<GLContextEGL> GLContextEGL::createPixmapContext(EGLContext sharingContext)
 {
-#if PLATFORM(X11)
+#if PLATFORM(GTK) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
+    return nullptr;
+#elif PLATFORM(X11)
     EGLDisplay display = sharedEGLDisplay();
     if (display == EGL_NO_DISPLAY)
         return nullptr;

@@ -866,6 +866,9 @@ webcore_built_sources += \
 
 platform_built_sources += \
 	DerivedSources/Platform/ColorData.cpp \
+	DerivedSources/Platform/WaylandWebkitGtkServerProtocol.h \
+	DerivedSources/Platform/WaylandWebkitGtkClientProtocol.h \
+	DerivedSources/Platform/WaylandWebkitGtkProtocol.c \
 	DerivedSources/Platform/WebKitFontFamilyNames.cpp \
 	DerivedSources/Platform/WebKitFontFamilyNames.h
 
@@ -6260,7 +6263,15 @@ platformgtk_sources += \
 	Source/WebCore/platform/graphics/GLContext.cpp \
 	Source/WebCore/platform/graphics/GLContext.h \
 	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
-	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h
+	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h \
+	Source/WebCore/platform/gtk/WaylandCompositor.cpp \
+	Source/WebCore/platform/gtk/WaylandCompositor.h \
+	Source/WebCore/platform/gtk/WaylandDisplayEventSource.cpp \
+	Source/WebCore/platform/gtk/WaylandDisplayEventsource.h \
+	Source/WebCore/platform/gtk/WaylandDisplay.cpp \
+	Source/WebCore/platform/gtk/WaylandDisplay.h \
+	Source/WebCore/platform/gtk/WaylandSurface.cpp \
+	Source/WebCore/platform/gtk/WaylandSurface.h
 endif # END USE_OPENGL
 if USE_EGL
 webcoregtk_sources += \

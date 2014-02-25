@@ -28,6 +28,10 @@
 #if USE(EGL) && !PLATFORM(GTK)
 #include "eglplatform.h"
 typedef EGLNativeWindowType GLNativeWindowType;
+#elif USE(EGL) && PLATFORM(GTK) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
+#include <wayland-egl.h>
+#include <EGL/eglplatform.h>
+typedef EGLNativeWindowType GLNativeWindowType;
 #else
 typedef uint64_t GLNativeWindowType;
 #endif
@@ -65,6 +69,10 @@ public:
 #if PLATFORM(X11)
     static Display* sharedX11Display();
     static void cleanupSharedX11Display();
+#endif
+
+#if USE(EGL) && PLATFORM(GTK) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
+    static struct wl_display* sharedWaylandDisplay();
 #endif
 
     static void addActiveContext(GLContext*);

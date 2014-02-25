@@ -131,3 +131,11 @@ DerivedSources/Platform/ColorData.cpp: $(WebCore)/platform/ColorData.gperf $(Web
 DerivedSources/Platform/WebKitFontFamilyNames.cpp: DerivedSources/Platform/WebKitFontFamilyNames.h
 DerivedSources/Platform/WebKitFontFamilyNames.h: $(WebCore)/dom/make_names.pl $(WebCore)/bindings/scripts/Hasher.pm $(WebCore)/bindings/scripts/StaticString.pm $(WebCore)/css/WebKitFontFamilyNames.in
 	$(AM_V_GEN)$(PERL) -I$(WebCore)/bindings/scripts $< --fonts $(WebCore)/css/WebKitFontFamilyNames.in --outputDir "$(GENSOURCES_PLATFORM)"
+
+if TARGET_WAYLAND
+DerivedSources/Platform/WaylandWebkitGtk%:
+	$(AM_V_GEN)
+	$(AM_V_at)wayland-scanner server-header < $(WebCore)/platform/gtk/wl-wkgtk.xml > DerivedSources/Platform/WaylandWebkitGtkServerProtocol.h
+	$(AM_V_at)wayland-scanner client-header < $(WebCore)/platform/gtk/wl-wkgtk.xml > DerivedSources/Platform/WaylandWebkitGtkClientProtocol.h
+	$(AM_V_at)wayland-scanner code < $(WebCore)/platform/gtk/wl-wkgtk.xml > DerivedSources/Platform/WaylandWebkitGtkProtocol.c
+endif

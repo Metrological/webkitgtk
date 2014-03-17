@@ -30,10 +30,17 @@
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
 #include "WaylandDisplayEventSource.h"
-
 #include "WaylandWebkitGtkServerProtocol.h"
-
+#include <fcntl.h>
 #include <gdk/gdkwayland.h>
+#include <sys/time.h>
+
+#define ELEMENT_CHANGE_LAYER          (1<<0)
+#define ELEMENT_CHANGE_OPACITY        (1<<1)
+#define ELEMENT_CHANGE_DEST_RECT      (1<<2)
+#define ELEMENT_CHANGE_SRC_RECT       (1<<3)
+#define ELEMENT_CHANGE_MASK_RESOURCE  (1<<4)
+#define ELEMENT_CHANGE_TRANSFORM      (1<<5)
 
 namespace WebCore {
 
@@ -50,22 +57,66 @@ typedef EGLBoolean (EGLAPIENTRYP PFNEGLUNBINDWAYLANDDISPLAYWL)(EGLDisplay, struc
 typedef EGLBoolean (EGLAPIENTRYP PFNEGLQUERYWAYLANDBUFFERWL)(EGLDisplay, struct wl_resource*, EGLint, EGLint*);
 #endif
 
-#if !defined(EGL_WAYLAND_BUFFER_WL)
-#define	EGL_WAYLAND_BUFFER_WL 0x31D5
-#endif
-
-static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC eglImageTargetTexture2d = 0;
-static PFNEGLCREATEIMAGEKHRPROC            eglCreateImage          = 0;
-static PFNEGLDESTROYIMAGEKHRPROC           eglDestroyImage         = 0;
 static PFNEGLBINDWAYLANDDISPLAYWL          eglBindDisplay          = 0;
 static PFNEGLUNBINDWAYLANDDISPLAYWL        eglUnbindDisplay        = 0;
 static PFNEGLQUERYWAYLANDBUFFERWL          eglQueryBuffer          = 0;
 
-#if USE(OPENGL_ES_2)
-static const EGLenum gGLAPI = EGL_OPENGL_ES_API;
-#else
-static const EGLenum gGLAPI = EGL_OPENGL_API;
-#endif
+// Raspberry Pi flip pipe magic
+
+static uint64_t rpiGetCurrentTime()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+void WaylandCompositor::rpiFlipPipeUpdateComplete(DISPMANX_UPDATE_HANDLE_T update, void* data)
+{
+    struct NestedDisplay* display = static_cast<struct NestedDisplay*>(data);
+
+    uint64_t time = rpiGetCurrentTime();
+    ssize_t ret = write(display->rpiFlipPipe.writefd, &time, sizeof time);
+    if (ret != sizeof time)
+        g_warning("rpiFlipPipeUpdateComplete: unexpected write outcome");
+}
+
+int WaylandCompositor::rpiFlipPipeHandler(int fd, uint32_t mask, void* data)
+{
+    if (mask != WL_EVENT_READABLE)
+        g_warning("rpiFlipPipeHandler: unexpected mask\n");
+
+    uint64_t time;
+    ssize_t ret = read(fd, &time, sizeof time);
+    if (ret != sizeof time)
+        g_warning("rpiFlipPipeHandler: unexpected read outcome\n");
+
+    WaylandCompositor* compositor = static_cast<WaylandCompositor*>(data);
+    compositor->queueWidgetRedraw();
+
+    return 1;
+}
+
+bool WaylandCompositor::initializeRPiFlipPipe(WaylandCompositor* compositor)
+{
+    int fd[2];
+    if (pipe2(fd, O_CLOEXEC) == -1)
+        return false;
+
+    compositor->m_display->rpiFlipPipe.readfd = fd[0];
+    compositor->m_display->rpiFlipPipe.writefd = fd[1];
+
+    struct wl_event_loop* loop = wl_display_get_event_loop(compositor->m_display->childDisplay);
+    compositor->m_display->rpiFlipPipe.source = wl_event_loop_add_fd(loop, compositor->m_display->rpiFlipPipe.readfd,
+        WL_EVENT_READABLE, rpiFlipPipeHandler, compositor);
+
+    if (!compositor->m_display->rpiFlipPipe.source) {
+        close(compositor->m_display->rpiFlipPipe.readfd);
+        close(compositor->m_display->rpiFlipPipe.writefd);
+        return false;
+    }
+
+    return true;
+}
 
 void WaylandCompositor::nestedBufferReferenceHandleDestroy(struct wl_listener* listener, void* data)
 {
@@ -142,13 +193,7 @@ bool WaylandCompositor::supportsRequiredExtensions(EGLDisplay eglDisplay)
     eglUnbindDisplay = (PFNEGLUNBINDWAYLANDDISPLAYWL) eglGetProcAddress("eglUnbindWaylandDisplayWL");
     if (!eglBindDisplay || !eglUnbindDisplay) {
         g_warning("Nested Wayland compositor requires eglBindWaylandDisplayWL.");
-        return false;
-    }
-
-    eglCreateImage = (PFNEGLCREATEIMAGEKHRPROC) eglGetProcAddress("eglCreateImageKHR");
-    eglDestroyImage = (PFNEGLDESTROYIMAGEKHRPROC) eglGetProcAddress("eglDestroyImageKHR");
-    if (!eglCreateImage || !eglDestroyImage) {
-        g_warning("Nested Wayland compositor requires eglCreateImageKHR.");
+        fprintf(stderr, "Nested Wayland compositor requires eglBindWaylandDisplayWL.");
         return false;
     }
 
@@ -158,81 +203,22 @@ bool WaylandCompositor::supportsRequiredExtensions(EGLDisplay eglDisplay)
         return false;
     }
 
-    eglImageTargetTexture2d =	(PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) eglGetProcAddress("glEGLImageTargetTexture2DOES");
-    if (!eglImageTargetTexture2d) {
-        g_warning("Nested Wayland compositor requires glEGLImageTargetTexture.");
-        return false;
-    }
-
     return true;
 }
 
 void WaylandCompositor::shutdownEGL(struct NestedDisplay* d)
 {
-    if (d->eglDevice) {
-        cairo_device_destroy(d->eglDevice);
-        d->eglDevice = 0;
-    }
-    if (d->eglDisplay != EGL_NO_DISPLAY) {
-        eglMakeCurrent(d->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        if (d->eglCtx != EGL_NO_CONTEXT) {
-            eglDestroyContext(d->eglDisplay, d->eglCtx);
-            d->eglCtx = EGL_NO_CONTEXT;
-        }
-        d->eglDisplay = EGL_NO_DISPLAY;
-    }
 }
 
 bool WaylandCompositor::initEGL(struct NestedDisplay* d)
 {
-    EGLint n;
-
-    // FIXME: we probably want to get the EGL configuration from GLContextEGL
-    static const EGLint contextAttribs[] = {
-#if USE(OPENGL_ES_2)
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-#endif
-        EGL_NONE
-    };
-    static const EGLint cfgAttribs[] = {
-#if USE(OPENGL_ES_2)
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-#else
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-#endif
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_STENCIL_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_NONE
-    };
-
-    if ((d->eglDisplay = eglGetDisplay(d->wlDisplay)) == EGL_NO_DISPLAY)
+    if ((d->eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY)) == EGL_NO_DISPLAY)
         return false;
 
     if (eglInitialize(d->eglDisplay, 0, 0) == EGL_FALSE)
         return false;
 
     if (!supportsRequiredExtensions(d->eglDisplay))
-        return false;
-
-    if (eglBindAPI(gGLAPI) == EGL_FALSE)
-        return false;
-
-    if (!eglChooseConfig(d->eglDisplay, cfgAttribs, &d->eglConfig, 1, &n) || n != 1)
-        return false;
-
-    d->eglCtx = eglCreateContext(d->eglDisplay, d->eglConfig, EGL_NO_CONTEXT, contextAttribs);
-    if (d->eglCtx == EGL_NO_CONTEXT)
-        return false;
-
-    if (!eglMakeCurrent(d->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, d->eglCtx))
-        return false;
-
-    d->eglDevice = cairo_egl_device_create(d->eglDisplay, d->eglCtx);
-    if (cairo_device_status(d->eglDevice) != CAIRO_STATUS_SUCCESS)
         return false;
 
     return true;
@@ -283,6 +269,9 @@ void WaylandCompositor::surfaceDestroy(struct wl_client* client, struct wl_resou
 
 void WaylandCompositor::surfaceAttach(struct wl_client* client, struct wl_resource* resource, struct wl_resource* bufferResource, int32_t sx, int32_t sy)
 {
+    if (!bufferResource)
+        return;
+
     struct NestedSurface* surface = static_cast<struct NestedSurface*>(wl_resource_get_user_data(resource));
 
     EGLint format;
@@ -338,67 +327,34 @@ void WaylandCompositor::surfaceCommit(struct wl_client* client, struct wl_resour
     if (!surface)
         return;
 
-    WaylandCompositor* compositor = surface->compositor;
-
-    // Destroy any existing EGLImage for this surface
-    if (surface->image != EGL_NO_IMAGE_KHR)
-        eglDestroyImage(compositor->m_display->eglDisplay, surface->image);
-
-    // Destroy any existing cairo surface for this surface
-    if (surface->cairoSurface) {
-        cairo_surface_destroy(surface->cairoSurface);
-        surface->cairoSurface = 0;
-    }
-
-    // Make the pending buffer current 
     nestedBufferReference(&surface->bufferRef, surface->buffer);
 
-    // Create a new EGLImage from the last buffer attached to this surface
-    EGLDisplay eglDisplay = compositor->m_display->eglDisplay;
-    surface->image = static_cast<EGLImageKHR*>(eglCreateImage(eglDisplay, EGL_NO_CONTEXT, EGL_WAYLAND_BUFFER_WL, surface->buffer->resource, 0));
-    if (surface->image == EGL_NO_IMAGE_KHR)
+    EGLint width, height;
+    EGLDisplay eglDisplay = surface->compositor->m_display->eglDisplay;
+    if (!eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_WIDTH, &width)
+        || !eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height)) {
         return;
-
-    // Bind the surface texture to the new EGLImage
-    glBindTexture(GL_TEXTURE_2D, surface->texture);
-    eglImageTargetTexture2d(GL_TEXTURE_2D, surface->image);
-
-    // Create a new cairo surface associated with the surface texture
-    int width, height;
-    eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_WIDTH, &width);
-    eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height);
-    cairo_device_t* device = compositor->m_display->eglDevice;
-    surface->cairoSurface = cairo_gl_surface_create_for_texture(device, CAIRO_CONTENT_COLOR_ALPHA, surface->texture, width, height);
-    cairo_surface_mark_dirty (surface->cairoSurface); // FIXME: Why do we need this?
-
-    // We are done with this buffer
-    if (surface->buffer) {
-        wl_list_remove(&surface->bufferDestroyListener.link);
-        surface->buffer = 0;
     }
 
-    // Redraw the widget backed by this surface
-    if (surface->widget)
-        gtk_widget_queue_draw(surface->widget);
+    gtk_widget_set_size_request(surface->widget, width, height);
 
-    // Process frame callbacks for this surface so the client can render a new frame
-    struct NestedFrameCallback *nc, *next;
-    wl_list_for_each_safe(nc, next, &surface->frameCallbackList, link) {
-        wl_callback_send_done(nc->resource, 0);
-        wl_resource_destroy(nc->resource);
+    struct NestedFrameCallback* callback, * nextCallback;
+    wl_list_for_each_safe(callback, nextCallback, &surface->frameCallbackList, link) {
+        wl_callback_send_done(callback->resource, 0);
+        wl_resource_destroy(callback->resource);
     }
+
     wl_list_init(&surface->frameCallbackList);
     wl_display_flush_clients(surface->compositor->m_display->childDisplay);
+
 }
 
 void WaylandCompositor::surfaceSetBufferTransform(struct wl_client* client, struct wl_resource* resource, int32_t transform)
 {
-
 }
 
 void WaylandCompositor::surfaceSetBufferScale(struct wl_client* client, struct wl_resource* resource, int32_t scale)
 {
-
 }
 
 static const struct wl_surface_interface surfaceInterface = {
@@ -421,17 +377,8 @@ void WaylandCompositor::doDestroyNestedSurface(struct NestedSurface* surface)
         wl_resource_destroy(cb->resource);
     wl_list_init(&surface->frameCallbackList);
 
-    // Destroy EGLImage
-    if (surface->image != EGL_NO_IMAGE_KHR) {
-        eglDestroyImage(surface->compositor->m_display->eglDisplay, surface->image);
-        surface->image = 0;
-    }
-
     // Release current buffer
     nestedBufferReference(&surface->bufferRef, NULL);
-
-    // Delete GL texture
-    glDeleteTextures(1, &surface->texture);
 
     // Unlink this source from the compositor's surface list
     wl_list_remove(&surface->link);
@@ -455,14 +402,6 @@ void WaylandCompositor::createSurface(struct wl_client* client, struct wl_resour
 
     wl_list_init(&surface->frameCallbackList);
     surface->bufferDestroyListener.notify = surfaceHandlePendingBufferDestroy;
-
-    // Create a GL texture to back this surface
-    glGenTextures (1, &surface->texture);
-    glBindTexture (GL_TEXTURE_2D, surface->texture);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     // Create the surface resource
     struct wl_resource* surfaceResource = wl_resource_create(client, &wl_surface_interface, 1, id);
@@ -550,6 +489,17 @@ bool WaylandCompositor::initialize()
     // Handle our display events through GLib's main loop
     m_display->eventSource = WaylandDisplayEventSource::createDisplayEventSource(m_display->childDisplay);
 
+    if (!initializeRPiFlipPipe(this)) {
+        g_warning("Could not initalize RPi flip pipe");
+        return false;
+    }
+
+    m_display->dispmanxDisplay = vc_dispmanx_display_open(0);
+    if (!m_display->dispmanxDisplay) {
+        g_warning("Could not open DispmanX display");
+        return false;
+    }
+
     return true;
 }
 
@@ -573,6 +523,8 @@ WaylandCompositor* WaylandCompositor::instance()
 WaylandCompositor::WaylandCompositor()
     : m_display(0)
 {
+    bcm_host_init();
+
     wl_list_init(&m_surfaces);
 }
 
@@ -638,8 +590,84 @@ GtkWidget* WaylandCompositor::getWidgetById(WaylandCompositor* compositor, int i
 
 cairo_surface_t* WaylandCompositor::cairoSurfaceForWidget(GtkWidget* widget)
 {
+/*
     struct NestedSurface* surface = getSurfaceForWidget(this, widget);
     return surface ? surface->cairoSurface : 0;
+*/
+    return 0;
+}
+
+void WaylandCompositor::queueWidgetRedraw()
+{
+    struct NestedSurface *surface, *next;
+    wl_list_for_each_safe(surface, next, &m_surfaces, link) {
+        // FIXME: The GtkWidget should be guaranteed.
+        if (surface->widget)
+            gtk_widget_queue_draw(surface->widget);
+    }
+}
+
+bool WaylandCompositor::redraw(GtkWidget* widget)
+{
+    static VC_DISPMANX_ALPHA_T alpha = {
+        static_cast<DISPMANX_FLAGS_ALPHA_T>(DISPMANX_FLAGS_ALPHA_FROM_SOURCE | DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS),
+        255, 0
+    };
+
+    struct NestedSurface* targetSurface = 0;
+    struct NestedSurface* surface, * nextSurface;
+    wl_list_for_each_safe(surface, nextSurface, &m_surfaces, link) {
+        // FIXME: The GtkWidget should be guaranteed.
+        if (surface->widget == widget) {
+            targetSurface = surface;
+            break;
+        }
+    }
+
+    if (!targetSurface || !targetSurface->buffer)
+        return true;
+
+    if (!eglQueryBuffer(m_display->eglDisplay, targetSurface->buffer->resource, EGL_WIDTH, &m_display->renderer.width)
+        || !eglQueryBuffer(m_display->eglDisplay, targetSurface->buffer->resource, EGL_HEIGHT, &m_display->renderer.height))
+        return true;
+
+    m_display->renderer.resource = vc_dispmanx_get_handle_from_wl_buffer(targetSurface->buffer->resource);
+
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(targetSurface->widget, &allocation);
+
+    m_display->renderer.update = vc_dispmanx_update_start(1);
+    ASSERT(m_display->renderer.update);
+
+    VC_RECT_T srcRect, dstRect;
+    vc_dispmanx_rect_set(&srcRect, 0 << 16, 0 << 16,
+        m_display->renderer.width << 16, m_display->renderer.height << 16);
+    vc_dispmanx_rect_set(&dstRect, 70, 70, allocation.width, allocation.height);
+
+    if (m_display->renderer.element == DISPMANX_NO_HANDLE) {
+        m_display->renderer.element = vc_dispmanx_element_add(m_display->renderer.update,
+            m_display->dispmanxDisplay, 2000, &dstRect, m_display->renderer.resource, &srcRect,
+            DISPMANX_PROTECTION_NONE, &alpha, NULL, DISPMANX_FLIP_VERT);
+    } else {
+        vc_dispmanx_element_change_source(m_display->renderer.update, m_display->renderer.element,
+            m_display->renderer.resource);
+        vc_dispmanx_element_modified(m_display->renderer.update, m_display->renderer.element, &dstRect);
+        int ret = vc_dispmanx_element_change_attributes(m_display->renderer.update, m_display->renderer.element,
+            ELEMENT_CHANGE_LAYER | ELEMENT_CHANGE_OPACITY | ELEMENT_CHANGE_TRANSFORM
+                | ELEMENT_CHANGE_DEST_RECT | ELEMENT_CHANGE_SRC_RECT,
+            2000, 255, &dstRect, &srcRect, DISPMANX_NO_HANDLE, DISPMANX_FLIP_VERT);
+        ASSERT(ret == 0);
+    }
+
+    int ret = vc_dispmanx_update_submit(m_display->renderer.update, rpiFlipPipeUpdateComplete, m_display);
+    ASSERT(ret == 0);
+
+    wl_list_remove(&targetSurface->bufferDestroyListener.link);
+    targetSurface->buffer = NULL;
+
+    m_display->renderer.update = DISPMANX_NO_HANDLE;
+    m_display->renderer.resource = DISPMANX_NO_HANDLE;
+    return true;
 }
 
 } // namespace WebCore

@@ -42,11 +42,13 @@ GLContextFromCurrentEGL::GLContextFromCurrentEGL()
     , m_surface(eglGetCurrentSurface(EGL_DRAW))
     , m_context(eglGetCurrentContext())
 {
+    fprintf(stderr, "GLContextFromCurrentEGL::GLContextFromCurrentEGL\n");
 }
 
 bool GLContextFromCurrentEGL::makeContextCurrent()
 {
     GLContext::makeContextCurrent();
+    fprintf(stderr, "GLContextFromCurrentEGL::makeContextCurrent surface %p\n", m_surface);
     return eglMakeCurrent(m_display, m_surface, m_surface, m_context);
 }
 

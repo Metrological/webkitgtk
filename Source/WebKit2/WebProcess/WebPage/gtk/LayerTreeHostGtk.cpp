@@ -51,6 +51,7 @@
 #include <gdk/gdk.h>
 #if PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 #include <gdk/gdkwayland.h>
+#include "GLContextEGL.h"
 #include "WaylandDisplay.h"
 #endif
 
@@ -115,10 +116,9 @@ GLContext* LayerTreeHostGtk::glContext()
 
     if (m_displayType == DISPLAY_TYPE_WAYLAND) {
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
-        EGLNativeWindowType windowHandle = m_wlSurface ? m_wlSurface->nativeWindowHandle() : 0;
-        if (!windowHandle)
+        if (!m_wlSurface)
             return 0;
-        m_context = GLContext::createContextForWindow(windowHandle, GLContext::sharingContext());
+        m_context = m_wlSurface->createGLContext();
         return m_context.get();
 #endif
     } else {
@@ -162,8 +162,7 @@ void LayerTreeHostGtk::initialize()
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
         // Request a wayland surface from the nested wayland compositor
         IntSize webPageSize = m_webPage->size();
-        WaylandDisplay* display = WaylandDisplay::instance();
-        m_wlSurface = display->createSurface(webPageSize.width(), webPageSize.height(), m_webPage->nativeWindowHandle());
+        m_wlSurface = WaylandDisplay::instance()->createSurface(webPageSize.width(), webPageSize.height(), m_webPage->nativeWindowHandle());
         if (!m_wlSurface)
             return;
 #endif
@@ -428,6 +427,12 @@ void LayerTreeHostGtk::flushAndRenderLayers()
     GLContext* context = glContext();
     if (!context || !context->makeContextCurrent())
         return;
+
+
+#if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
+    if (m_displayType == DISPLAY_TYPE_WAYLAND && m_wlSurface)
+        m_wlSurface->requestFrame();
+#endif
 
     m_lastFlushTime = currentTime();
     if (!flushPendingLayerChanges())

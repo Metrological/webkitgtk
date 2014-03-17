@@ -79,7 +79,7 @@ GLContext* GLContext::sharingContext()
 #if USE(EGL) && PLATFORM(WAYLAND) && PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
 struct wl_display* GLContext::sharedWaylandDisplay()
 {
-    return WaylandDisplay::instance()->nativeDisplay();
+    return WaylandDisplay::nativeDisplay();
 }
 #endif
 

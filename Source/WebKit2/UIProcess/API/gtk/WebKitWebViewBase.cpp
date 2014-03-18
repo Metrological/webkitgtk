@@ -469,30 +469,34 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
 
     // To avoid flashes when initializing accelerated compositing for the first
     // time, we wait until we know there's a frame ready before rendering.
-    cairo_surface_t* surface = NULL;
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
     DisplayType displayType = getDisplayType();
-    if (displayType == DISPLAY_TYPE_WAYLAND) {
+
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
         if (!priv->waylandCompositor)
             return false;
-        surface = priv->waylandCompositor->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+        return priv->waylandCompositor->redraw(GTK_WIDGET(webViewBase));
+    }
 #endif
-    } else if (displayType == DISPLAY_TYPE_X11) {
+
 #if PLATFORM(X11) && defined(GDK_WINDOWING_X11)
+    if (displayType == DISPLAY_TYPE_X11) {
         if (!priv->redirectedWindow)
             return false;
-        surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+        cairo_surface_t* surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+
+        if (surface) {
+            cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
+            cairo_set_source_surface(cr, surface, 0, 0);
+            cairo_fill(cr);
+        }
+
+        return true;
+    }
 #endif
-    }
 
-    if (surface) {
-        cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
-        cairo_set_source_surface(cr, surface, 0, 0);
-        cairo_fill(cr);
-    }
-
-    return true;
+    return false;
 }
 #endif
 

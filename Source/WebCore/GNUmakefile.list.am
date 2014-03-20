@@ -6266,6 +6266,8 @@ platformgtk_sources += \
 	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h \
 	Source/WebCore/platform/gtk/WaylandCompositor.cpp \
 	Source/WebCore/platform/gtk/WaylandCompositor.h \
+	Source/WebCore/platform/gtk/WaylandCompositorEGL.cpp \
+	Source/WebCore/platform/gtk/WaylandCompositorEGL.h \
 	Source/WebCore/platform/gtk/WaylandDisplayEventSource.cpp \
 	Source/WebCore/platform/gtk/WaylandDisplayEventsource.h \
 	Source/WebCore/platform/gtk/WaylandDisplay.cpp \

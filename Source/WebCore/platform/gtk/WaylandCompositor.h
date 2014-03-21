@@ -31,6 +31,7 @@
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
+#include <memory>
 #include <wayland-client.h>
 #include <wayland-server.h>
 #include <wayland-egl.h>
@@ -82,6 +83,8 @@ struct NestedBuffer {
 
 // Nested compositor display
 struct NestedDisplay {
+    ~NestedDisplay();
+
     GdkDisplay* gdkDisplay;               // Gdk display
     struct wl_display* wlDisplay;         // Main Wayland display
     EGLDisplay eglDisplay;
@@ -143,7 +146,7 @@ protected:
 
     virtual NestedSurface* createNestedSurface() = 0;
 
-    struct NestedDisplay* m_display;
+    std::unique_ptr<NestedDisplay> m_display;
     HashMap<GtkWidget*, NestedSurface*> m_widgetHashMap;
     struct wl_list m_surfaces;
 };

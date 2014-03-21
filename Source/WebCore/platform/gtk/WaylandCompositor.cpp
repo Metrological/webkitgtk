@@ -121,6 +121,18 @@ NestedSurface::~NestedSurface()
     wl_list_remove(&link);
 }
 
+NestedDisplay::~NestedDisplay()
+{
+    if (eventSource)
+        g_source_remove(g_source_get_id(eventSource));
+    if (wkgtkGlobal)
+        wl_global_destroy(wkgtkGlobal);
+    if (wlGlobal)
+        wl_global_destroy(wlGlobal);
+    if (childDisplay)
+        wl_display_destroy(childDisplay);
+}
+
 static const struct wl_surface_interface surfaceInterface = {
     // destroy
     [](struct wl_client*, struct wl_resource* resource)
@@ -219,19 +231,6 @@ WaylandCompositor::~WaylandCompositor()
     wl_list_for_each_safe(surface, next, &m_surfaces, link)
         delete surface;
     wl_list_init(&m_surfaces);
-
-    if (m_display) {
-        if (m_display->eventSource)
-            g_source_remove(g_source_get_id(m_display->eventSource));
-        if (m_display->wkgtkGlobal)
-            wl_global_destroy(m_display->wkgtkGlobal);
-        if (m_display->wlGlobal)
-            wl_global_destroy(m_display->wlGlobal);
-        if (m_display->childDisplay)
-            wl_display_destroy(m_display->childDisplay);
-
-        g_free(m_display);
-    }
 }
 
 bool WaylandCompositor::initialize()
@@ -242,7 +241,7 @@ bool WaylandCompositor::initialize()
         return false;
 
     // Create the nested display
-    m_display = g_new0(struct NestedDisplay, 1);
+    m_display = std::make_unique<NestedDisplay>();
     m_display->gdkDisplay = gdkDisplay;
     m_display->wlDisplay = wlDisplay;
 

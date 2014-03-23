@@ -42,7 +42,10 @@ namespace WebCore {
 class WaylandSurface
 {
 public:
-    static PassOwnPtr<WaylandSurface> create(struct wl_surface*, EGLNativeWindowType);
+    static PassOwnPtr<WaylandSurface> create(struct wl_surface* surface, EGLNativeWindowType native)
+    {
+        return adoptPtr(new WaylandSurface(surface, native));
+    }
     virtual ~WaylandSurface();
 
     // Surface interface

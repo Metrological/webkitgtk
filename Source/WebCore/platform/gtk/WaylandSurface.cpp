@@ -33,11 +33,6 @@
 
 namespace WebCore {
 
-PassOwnPtr<WaylandSurface> WaylandSurface::create(struct wl_surface* surface, EGLNativeWindowType native)
-{
-    return adoptPtr(new WaylandSurface(surface, native));
-}
-
 WaylandSurface::WaylandSurface(struct wl_surface* surface, EGLNativeWindowType native)
     : m_surface(surface)
     , m_native(native)

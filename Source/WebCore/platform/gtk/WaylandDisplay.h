@@ -58,7 +58,7 @@ private:
     WaylandDisplay(struct wl_display*);
     ~WaylandDisplay();
 
-    static WaylandDisplay* m_instance;
+    static const struct wl_registry_listener m_registryListener;
 
     struct wl_display* m_display;
     struct wl_registry* m_registry;

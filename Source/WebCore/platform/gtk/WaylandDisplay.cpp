@@ -37,51 +37,47 @@
 
 namespace WebCore {
 
-void WaylandDisplay::registryHandleGlobal(void *data, struct wl_registry *registry,
-    uint32_t name, const char *interface, uint32_t version)
-{
-    WaylandDisplay* display = static_cast<WaylandDisplay*>(data);
-    if (strcmp(interface, "wl_compositor") == 0)
-        display->m_compositor =
-            static_cast<struct wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 1));
-    else if (strcmp(interface, "wl_wkgtk") == 0)
-        display->m_wkgtk =
-            static_cast<struct wl_wkgtk*>(wl_registry_bind(registry, name, &wl_wkgtk_interface, 1));
-}
+const struct wl_registry_listener WaylandDisplay::m_registryListener = {
+    // global
+    [](void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t)
+    {
+        WaylandDisplay* display = static_cast<WaylandDisplay*>(data);
+        if (strcmp(interface, "wl_compositor") == 0)
+            display->m_compositor = static_cast<struct wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 1));
+        else if (strcmp(interface, "wl_wkgtk") == 0)
+            display->m_wkgtk = static_cast<struct wl_wkgtk*>(wl_registry_bind(registry, name, &wl_wkgtk_interface, 1));
+    },
 
-void WaylandDisplay::registryHandleGlobalRemove(void *data, struct wl_registry *registry, uint32_t name)
-{
-    // FIXME: if this can happen without the UI Process getting shut down we should probably
-    // destroy our cached display instance
-}
-
-static const struct wl_registry_listener registryListener = {
-    WaylandDisplay::registryHandleGlobal,
-    WaylandDisplay::registryHandleGlobalRemove
+    // global_remove
+    [](void*, struct wl_registry*, uint32_t)
+    {
+        // FIXME: if this can happen without the UI Process getting shut down we should probably
+        // destroy our cached display instance
+    }
 };
-
-WaylandDisplay* WaylandDisplay::m_instance = 0;
 
 WaylandDisplay* WaylandDisplay::instance()
 {
-    if (m_instance)
-        return m_instance;
+    WaylandDisplay* display = nullptr;
+    if (display)
+        return display;
 
     struct wl_display* wlDisplay = wl_display_connect("webkitgtk-wayland-compositor-socket");
     if (!wlDisplay)
         return nullptr;
 
-    m_instance = new WaylandDisplay(wlDisplay);
-    return m_instance;
+    display= new WaylandDisplay(wlDisplay);
+    return display;
 }
 
 WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
     : m_display(wlDisplay)
-    , m_registry(0)
-    , m_compositor(0)
+    , m_registry(nullptr)
+    , m_compositor(nullptr)
+    , m_wkgtk(nullptr)
 {
     m_registry = wl_display_get_registry(m_display);
-    wl_registry_add_listener(m_registry, &registryListener, this);
+    wl_registry_add_listener(m_registry, &m_registryListener, this);
     wl_display_roundtrip(m_display);
 }
 

@@ -103,6 +103,7 @@ NestedSurface::NestedSurface(WaylandCompositor* compositor)
         surface->buffer = nullptr;
     };
 
+    bufferRef.buffer = nullptr;
     wl_list_init(&bufferRef.destroyListener.link);
 }
 

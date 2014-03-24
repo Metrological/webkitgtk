@@ -284,7 +284,7 @@ bool WaylandCompositor::initialize()
     }
 
     if (!initializeEGL()) {
-        g_warning("Nested Wayland compositor could not initalize EGL.");
+        g_warning("Nested Wayland compositor could not initialize EGL.");
         return false;
     }
 

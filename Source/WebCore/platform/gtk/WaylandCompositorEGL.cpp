@@ -147,9 +147,6 @@ void WaylandCompositorEGL::commitSurface(NestedSurface* surfaceBase, struct wl_c
     wl_display_flush_clients(m_display->childDisplay);
 }
 
-static long long lastFPSDumpTime = 0;
-static int frameCount = 0;
-
 void WaylandCompositorEGL::render(WaylandCompositor::RenderingContext& contextBase)
 {
     ASSERT(contextBase.type == WaylandCompositor::EGL);
@@ -166,15 +163,6 @@ void WaylandCompositorEGL::render(WaylandCompositor::RenderingContext& contextBa
     cairo_rectangle(context.cr, context.clipRect->x, context.clipRect->y, context.clipRect->width, context.clipRect->height);
     cairo_set_source_surface(context.cr, surface->cairoSurface, 0, 0);
     cairo_fill(context.cr);
-
-    frameCount++;
-    long long renderTime = g_get_real_time();
-    if (renderTime - lastFPSDumpTime >= 5000000) {
-        if (lastFPSDumpTime)
-            std::cerr << "WaylandCompositorEGL::render(): FPS " << (float)frameCount * 1000000 / (renderTime - lastFPSDumpTime) << std::endl;
-        frameCount = 0;
-        lastFPSDumpTime = renderTime;
-    }
 }
 
 bool WaylandCompositorEGL::initializeEGL()

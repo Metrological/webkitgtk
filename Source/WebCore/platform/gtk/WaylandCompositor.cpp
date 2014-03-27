@@ -93,6 +93,8 @@ void NestedBuffer::destroyHandler(struct wl_listener* listener, void* data)
 
 NestedSurface::NestedSurface(WaylandCompositor* compositor)
     : compositor(compositor)
+    , buffer(nullptr)
+    , widget(nullptr)
 {
     wl_list_init(&frameCallbackList);
 
@@ -102,6 +104,8 @@ NestedSurface::NestedSurface(WaylandCompositor* compositor)
         surface = wl_container_of(listener, surface, bufferDestroyListener);
         surface->buffer = nullptr;
     };
+
+    wl_list_init(&link);
 
     bufferRef.buffer = nullptr;
     wl_list_init(&bufferRef.destroyListener.link);

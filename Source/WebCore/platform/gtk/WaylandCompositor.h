@@ -101,7 +101,9 @@ struct NestedDisplay {
 struct NestedFrameCallback {
     NestedFrameCallback(struct wl_resource* resource)
         : resource(resource)
-    { }
+    {
+        wl_list_init(&link);
+    }
 
     struct wl_resource* resource;
     struct wl_list link;

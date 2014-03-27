@@ -58,7 +58,7 @@ const struct wl_registry_listener WaylandDisplay::m_registryListener = {
 
 WaylandDisplay* WaylandDisplay::instance()
 {
-    WaylandDisplay* display = nullptr;
+    static WaylandDisplay* display = nullptr;
     if (display)
         return display;
 
@@ -66,7 +66,7 @@ WaylandDisplay* WaylandDisplay::instance()
     if (!wlDisplay)
         return nullptr;
 
-    display= new WaylandDisplay(wlDisplay);
+    display = new WaylandDisplay(wlDisplay);
     return display;
 }
 

@@ -26,7 +26,16 @@ struct NestedSurfaceEGL : NestedSurface {
         , texture(0)
         , image(nullptr) // FIXME: Whay is this a pointer? Why not initialize it to EGL_NO_IMAGE_KHR?
         , cairoSurface(nullptr)
-    { }
+    {
+        // Create a GL texture to back this surface
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+
     virtual ~NestedSurfaceEGL()
     {
         if (image != EGL_NO_IMAGE_KHR)
@@ -247,17 +256,7 @@ bool WaylandCompositorEGL::initializeEGL()
 
 NestedSurface* WaylandCompositorEGL::createNestedSurface()
 {
-    NestedSurfaceEGL* surface = new NestedSurfaceEGL(this);
-
-    // Create a GL texture to back this surface
-    glGenTextures(1, &surface->texture);
-    glBindTexture(GL_TEXTURE_2D, surface->texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    return surface;
+    return new NestedSurfaceEGL(this);
 }
 
 } // namespace WebCore

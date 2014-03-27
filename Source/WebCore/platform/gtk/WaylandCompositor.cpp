@@ -118,7 +118,7 @@ NestedSurface::~NestedSurface()
     // Release current buffer
     NestedBuffer::reference(&bufferRef, nullptr);
 
-    // Unlink this source from the compositor's surface list
+    // Unlink this surface from the compositor's surface list
     wl_list_remove(&link);
 }
 

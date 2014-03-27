@@ -83,20 +83,6 @@ struct NestedBuffer {
     uint32_t busyCount;
 };
 
-// Nested compositor display
-struct NestedDisplay {
-    ~NestedDisplay();
-
-    GdkDisplay* gdkDisplay;               // Gdk display
-    struct wl_display* wlDisplay;         // Main Wayland display
-    EGLDisplay eglDisplay;
-
-    struct wl_display* childDisplay;      // Nested display
-    struct wl_global* wlGlobal;           // Wayland display global
-    struct wl_global* wkgtkGlobal;        // Wayland webkitgtk interface global
-    GSource* eventSource;                 // Display event source
-};
-
 // List of pending frame callbacks on a nested surface
 struct NestedFrameCallback {
     NestedFrameCallback(struct wl_resource* resource)
@@ -140,7 +126,7 @@ public:
     };
     virtual void render(RenderingContext&) = 0;
 
-    EGLDisplay eglDisplay() { return m_display->eglDisplay; }
+    EGLDisplay eglDisplay() { return m_display.eglDisplay; }
 
 protected:
     WaylandCompositor();
@@ -151,7 +137,17 @@ protected:
 
     virtual NestedSurface* createNestedSurface() = 0;
 
-    std::unique_ptr<NestedDisplay> m_display;
+    struct Display {
+        GdkDisplay* gdkDisplay;
+        struct wl_display* wlDisplay;
+        EGLDisplay eglDisplay;
+
+        struct wl_display* childDisplay;
+        struct wl_global* wlGlobal;
+        struct wl_global* wkgtkGlobal;
+        GSource* eventSource;
+    } m_display;
+
     HashMap<GtkWidget*, NestedSurface*> m_widgetHashMap;
     struct wl_list m_surfaces;
 };

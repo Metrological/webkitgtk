@@ -1052,7 +1052,7 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, WebCon
     if (displayType == DISPLAY_TYPE_WAYLAND) {
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
         if (priv->waylandCompositor)
-            priv->pageProxy->setAcceleratedCompositingWindowId(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(webkitWebViewBase), "wayland-compositor-widget-id")));
+            priv->pageProxy->setAcceleratedCompositingWindowId(WaylandCompositor::widgetID(GTK_WIDGET(webkitWebViewBase)));
 #endif
     } else {
 #if PLATFORM(X11) && defined(GDK_WINDOWING_X11)

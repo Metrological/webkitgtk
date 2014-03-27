@@ -117,6 +117,7 @@ public:
     // WebKit integration
     void addWidget(GtkWidget*);
     void removeWidget(GtkWidget*);
+    static unsigned widgetID(GtkWidget*);
 
     void setSurfaceForWidget(struct wl_client*, struct wl_resource*, uint32_t);
 

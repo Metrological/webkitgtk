@@ -316,8 +316,8 @@ bool WaylandCompositor::initialize()
 
 void WaylandCompositor::addWidget(GtkWidget* widget)
 {
-    static int nextWidgetId = 0;
-    g_object_set_data(G_OBJECT(widget), "wayland-compositor-widget-id", GINT_TO_POINTER(++nextWidgetId));
+    static unsigned nextWidgetId = 0;
+    g_object_set_data(G_OBJECT(widget), "wayland-compositor-widget-id", GUINT_TO_POINTER(++nextWidgetId));
     m_widgetHashMap.set(widget, nullptr);
 }
 
@@ -327,18 +327,23 @@ void WaylandCompositor::removeWidget(GtkWidget* widget)
     if (surface)
         surface->widget = nullptr;
 
-    int widgetId = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id"));
+    int widgetId = widgetID(widget);
     if (widgetId) {
         m_widgetHashMap.remove(widget);
         g_object_steal_data(G_OBJECT(widget), "wayland-compositor-widget-id");
     }
 }
 
+unsigned WaylandCompositor::widgetID(GtkWidget* widget)
+{
+    return GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id"));
+}
+
 void WaylandCompositor::setSurfaceForWidget(struct wl_client*, struct wl_resource* surfaceResource, uint32_t id)
 {
     NestedSurface* surface = static_cast<NestedSurface*>(wl_resource_get_user_data(surfaceResource));
     for (const auto& widget : m_widgetHashMap.keys()) {
-        if (id == static_cast<guint>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(widget), "wayland-compositor-widget-id")))) {
+        if (id == widgetID(widget)) {
             // Associate the new surface with the widget, the client is responsible
             // for destroying any previous surface created for this widget
             m_widgetHashMap.set(widget, surface);

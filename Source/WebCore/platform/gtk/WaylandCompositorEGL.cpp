@@ -60,7 +60,7 @@ void WaylandCompositorEGL::attachSurface(NestedSurface* surfaceBase, struct wl_c
     NestedSurfaceEGL* surface = static_cast<NestedSurfaceEGL*>(surfaceBase);
 
     EGLint format;
-    if (!eglQueryBuffer(m_display->eglDisplay, bufferResource, EGL_TEXTURE_FORMAT, &format))
+    if (!eglQueryBuffer(m_display.eglDisplay, bufferResource, EGL_TEXTURE_FORMAT, &format))
         return;
     if (format != EGL_TEXTURE_RGB && format != EGL_TEXTURE_RGBA)
         return;
@@ -102,7 +102,7 @@ void WaylandCompositorEGL::commitSurface(NestedSurface* surfaceBase, struct wl_c
 
     // Destroy any existing EGLImage for this surface
     if (surface->image != EGL_NO_IMAGE_KHR)
-        eglDestroyImage(m_display->eglDisplay, surface->image);
+        eglDestroyImage(m_display.eglDisplay, surface->image);
 
     // Destroy any existing cairo surface for this surface
     if (surface->cairoSurface) {
@@ -111,7 +111,7 @@ void WaylandCompositorEGL::commitSurface(NestedSurface* surfaceBase, struct wl_c
     }
 
     // Create a new EGLImage from the last buffer attached to this surface
-    surface->image = static_cast<EGLImageKHR*>(eglCreateImage(m_display->eglDisplay, EGL_NO_CONTEXT, EGL_WAYLAND_BUFFER_WL, surface->buffer->resource, nullptr));
+    surface->image = static_cast<EGLImageKHR*>(eglCreateImage(m_display.eglDisplay, EGL_NO_CONTEXT, EGL_WAYLAND_BUFFER_WL, surface->buffer->resource, nullptr));
     if (surface->image == EGL_NO_IMAGE_KHR)
         return;
 
@@ -121,8 +121,8 @@ void WaylandCompositorEGL::commitSurface(NestedSurface* surfaceBase, struct wl_c
 
     // Create a new cairo surface associated with the surface texture
     int width, height;
-    eglQueryBuffer(m_display->eglDisplay, surface->buffer->resource, EGL_WIDTH, &width);
-    eglQueryBuffer(m_display->eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height);
+    eglQueryBuffer(m_display.eglDisplay, surface->buffer->resource, EGL_WIDTH, &width);
+    eglQueryBuffer(m_display.eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height);
     surface->cairoSurface = cairo_gl_surface_create_for_texture(m_eglDevice, CAIRO_CONTENT_COLOR_ALPHA, surface->texture, width, height);
     cairo_surface_mark_dirty (surface->cairoSurface); // FIXME: Why do we need this?
 
@@ -144,7 +144,7 @@ void WaylandCompositorEGL::commitSurface(NestedSurface* surfaceBase, struct wl_c
     }
 
     wl_list_init(&surface->frameCallbackList);
-    wl_display_flush_clients(m_display->childDisplay);
+    wl_display_flush_clients(m_display.childDisplay);
 }
 
 void WaylandCompositorEGL::render(WaylandCompositor::RenderingContext& contextBase)
@@ -195,11 +195,11 @@ bool WaylandCompositorEGL::initializeEGL()
     static const EGLenum glAPI = EGL_OPENGL_API;
 #endif
 
-    m_display->eglDisplay = eglGetDisplay(m_display->wlDisplay);
-    if (m_display->eglDisplay == EGL_NO_DISPLAY)
+    m_display.eglDisplay = eglGetDisplay(m_display.wlDisplay);
+    if (m_display.eglDisplay == EGL_NO_DISPLAY)
         return false;
 
-    if (eglInitialize(m_display->eglDisplay, nullptr, nullptr) == EGL_FALSE)
+    if (eglInitialize(m_display.eglDisplay, nullptr, nullptr) == EGL_FALSE)
         return false;
 
     if (eglBindAPI(glAPI) == EGL_FALSE)
@@ -225,17 +225,17 @@ bool WaylandCompositorEGL::initializeEGL()
     }
 
     EGLint n;
-    if (eglChooseConfig(m_display->eglDisplay, configAttributes, &m_eglConfig, 1, &n) == EGL_FALSE || n != 1)
+    if (eglChooseConfig(m_display.eglDisplay, configAttributes, &m_eglConfig, 1, &n) == EGL_FALSE || n != 1)
         return false;
 
-    m_eglContext = eglCreateContext(m_display->eglDisplay, m_eglConfig, EGL_NO_CONTEXT, contextAttributes);
+    m_eglContext = eglCreateContext(m_display.eglDisplay, m_eglConfig, EGL_NO_CONTEXT, contextAttributes);
     if (m_eglContext == EGL_NO_CONTEXT)
         return false;
 
-    if (eglMakeCurrent(m_display->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, m_eglContext) == EGL_FALSE)
+    if (eglMakeCurrent(m_display.eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, m_eglContext) == EGL_FALSE)
         return false;
 
-    m_eglDevice = cairo_egl_device_create(m_display->eglDisplay, m_eglContext);
+    m_eglDevice = cairo_egl_device_create(m_display.eglDisplay, m_eglContext);
     if (cairo_device_status(m_eglDevice) != CAIRO_STATUS_SUCCESS)
         return false;
 

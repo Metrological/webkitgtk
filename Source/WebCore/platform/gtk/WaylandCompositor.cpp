@@ -126,18 +126,6 @@ NestedSurface::~NestedSurface()
     wl_list_remove(&link);
 }
 
-NestedDisplay::~NestedDisplay()
-{
-    if (eventSource)
-        g_source_remove(g_source_get_id(eventSource));
-    if (wkgtkGlobal)
-        wl_global_destroy(wkgtkGlobal);
-    if (wlGlobal)
-        wl_global_destroy(wlGlobal);
-    if (childDisplay)
-        wl_display_destroy(childDisplay);
-}
-
 static const struct wl_surface_interface surfaceInterface = {
     // destroy
     [](struct wl_client*, struct wl_resource* resource)
@@ -225,8 +213,8 @@ WaylandCompositor* WaylandCompositor::instance()
 }
 
 WaylandCompositor::WaylandCompositor()
-    : m_display(nullptr)
 {
+    m_display = { nullptr, nullptr, EGL_NO_DISPLAY, nullptr, nullptr, nullptr, nullptr };
     wl_list_init(&m_surfaces);
 }
 
@@ -236,6 +224,15 @@ WaylandCompositor::~WaylandCompositor()
     wl_list_for_each_safe(surface, next, &m_surfaces, link)
         delete surface;
     wl_list_init(&m_surfaces);
+
+    if (m_display.eventSource)
+        g_source_remove(g_source_get_id(m_display.eventSource));
+    if (m_display.wkgtkGlobal)
+        wl_global_destroy(m_display.wkgtkGlobal);
+    if (m_display.wlGlobal)
+        wl_global_destroy(m_display.wlGlobal);
+    if (m_display.childDisplay)
+        wl_display_destroy(m_display.childDisplay);
 }
 
 bool WaylandCompositor::initialize()
@@ -246,43 +243,42 @@ bool WaylandCompositor::initialize()
         return false;
 
     // Create the nested display
-    m_display = std::make_unique<NestedDisplay>();
-    m_display->gdkDisplay = gdkDisplay;
-    m_display->wlDisplay = wlDisplay;
+    m_display.gdkDisplay = gdkDisplay;
+    m_display.wlDisplay = wlDisplay;
 
-    m_display->childDisplay = wl_display_create();
-    if (!m_display->childDisplay) {
+    m_display.childDisplay = wl_display_create();
+    if (!m_display.childDisplay) {
         g_warning("Nested Wayland compositor could not create display object.");
         return false;
     }
 
-    if (wl_display_add_socket(m_display->childDisplay, "webkitgtk-wayland-compositor-socket") != 0) {
+    if (wl_display_add_socket(m_display.childDisplay, "webkitgtk-wayland-compositor-socket") != 0) {
         g_warning("Nested Wayland compositor could not create display socket");
         return false;
     }
 
     // Bind the compositor to this display
-    m_display->wlGlobal = wl_global_create(m_display->childDisplay, &wl_compositor_interface, wl_compositor_interface.version, this,
+    m_display.wlGlobal = wl_global_create(m_display.childDisplay, &wl_compositor_interface, wl_compositor_interface.version, this,
         [](struct wl_client* client, void* data, uint32_t version, uint32_t id) {
             WaylandCompositor* compositor = static_cast<WaylandCompositor*>(data);
             struct wl_resource* resource = wl_resource_create(client, &wl_compositor_interface, std::min(static_cast<int>(version), 3), id);
             wl_resource_set_implementation(resource, &compositorInterface, compositor, nullptr);
         }
     );
-    if (!m_display->wlGlobal) {
+    if (!m_display.wlGlobal) {
         g_warning("Nested Wayland compositor could not register display global");
         return false;
     }
 
     // Bind the webkitgtk protocol extension
-    m_display->wkgtkGlobal = wl_global_create(m_display->childDisplay, &wl_wkgtk_interface, 1, this,
+    m_display.wkgtkGlobal = wl_global_create(m_display.childDisplay, &wl_wkgtk_interface, 1, this,
         [](struct wl_client* client, void* data, uint32_t version, uint32_t id) {
             WaylandCompositor* compositor = static_cast<WaylandCompositor*>(data);;
             struct wl_resource* resource = wl_resource_create(client, &wl_wkgtk_interface, 1, id);
             wl_resource_set_implementation(resource, &wkgtkInterface, compositor, nullptr);
         }
     );
-    if (!m_display->wkgtkGlobal) {
+    if (!m_display.wkgtkGlobal) {
         g_warning("Nested Wayland compositor could not register webkitgtk global");
         return false;
     }
@@ -293,7 +289,7 @@ bool WaylandCompositor::initialize()
     }
 
     // Make sure we have the required Wayland EGL extension
-    const char* extensions = eglQueryString(m_display->eglDisplay, EGL_EXTENSIONS);
+    const char* extensions = eglQueryString(m_display.eglDisplay, EGL_EXTENSIONS);
     if (!strstr(extensions, "EGL_WL_bind_wayland_display")) {
         g_warning("Nested Wayland compositor requires EGL_WL_bind_wayland_display extension.\n");
         return false;
@@ -307,13 +303,13 @@ bool WaylandCompositor::initialize()
         return false;
     }
 
-    if (!eglBindDisplay(m_display->eglDisplay, m_display->childDisplay)) {
+    if (!eglBindDisplay(m_display.eglDisplay, m_display.childDisplay)) {
         g_warning("Nested Wayland compositor could not bind nested display");
         return false;
     }
 
     // Handle our display events through GLib's main loop
-    m_display->eventSource = WaylandDisplayEventSource::createDisplayEventSource(m_display->childDisplay);
+    m_display.eventSource = WaylandDisplayEventSource::createDisplayEventSource(m_display.childDisplay);
 
     return true;
 }

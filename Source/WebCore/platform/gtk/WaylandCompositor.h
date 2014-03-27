@@ -67,6 +67,8 @@ struct NestedBuffer {
         , busyCount(0)
     {
         wl_signal_init(&destroySignal);
+
+        wl_list_init(&destroyListener.link);
         destroyListener.notify = destroyHandler;
         wl_resource_add_destroy_listener(resource, &destroyListener);
     }

@@ -60,96 +60,43 @@ static const struct wl_registry_listener registryListener = {
     WaylandDisplay::registryHandleGlobalRemove
 };
 
-WaylandDisplay* WaylandDisplay::m_instance = nullptr;
-struct wl_display* WaylandDisplay::m_nativeDisplay = nullptr;
+WaylandDisplay* WaylandDisplay::m_instance = 0;
 
 WaylandDisplay* WaylandDisplay::instance()
 {
-    if (!m_instance)
-        m_instance = new WaylandDisplay;
+    if (m_instance)
+        return m_instance;
+
+    struct wl_display* wlDisplay = wl_display_connect("webkitgtk-wayland-compositor-socket");
+    if (!wlDisplay)
+        return nullptr;
+
+    m_instance = new WaylandDisplay(wlDisplay);
     return m_instance;
 }
 
-struct wl_display* WaylandDisplay::nativeDisplay()
+WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
+    : m_display(wlDisplay)
+    , m_registry(0)
+    , m_compositor(0)
 {
-    if (!m_nativeDisplay)
-        m_nativeDisplay = wl_display_connect("webkitgtk-wayland-compositor-socket");
-    RELEASE_ASSERT(m_nativeDisplay);
-    return m_nativeDisplay;
-}
-
-WaylandDisplay::WaylandDisplay()
-    : m_registry(nullptr)
-    , m_compositor(nullptr)
-    , m_wkgtk(nullptr)
-{
-    m_registry = wl_display_get_registry(nativeDisplay());
+    m_registry = wl_display_get_registry(m_display);
     wl_registry_add_listener(m_registry, &registryListener, this);
-
-    wl_display_roundtrip(nativeDisplay());
-
-    static const EGLint configAttributes[] = {
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RED_SIZE, 1,
-        EGL_GREEN_SIZE, 1,
-        EGL_BLUE_SIZE, 1,
-        EGL_ALPHA_SIZE, 1,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-        EGL_NONE
-    };
-
-    static const EGLint contextAttributes[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE
-    };
-
-    m_eglDisplay = eglGetDisplay(nativeDisplay());
-    if (m_eglDisplay == EGL_NO_DISPLAY) {
-        g_warning("eglGetDisplay EGL_NO_DISPLAY");
-        return;
-    }
-
-    if (eglInitialize(m_eglDisplay, 0, 0) == EGL_FALSE) {
-        g_warning("eglInitialize EGL_FALSE");
-        return;
-    }
-
-    if (eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE) {
-        g_warning("eglBindAPI EGL_FALSE");
-        return;
-    }
-
-    EGLint n;
-    if (!eglChooseConfig(m_eglDisplay, configAttributes, &m_eglConfig, 1, &n) || n != 1) {
-        g_warning("eglChooseConfig failed");
-        return;
-    }
-
-    m_eglContext = eglCreateContext(m_eglDisplay, m_eglConfig, EGL_NO_CONTEXT, contextAttributes);
-    if (m_eglContext == EGL_NO_CONTEXT) {
-        g_warning("eglCreateContext EGL_NO_CONTEXT");
-        return;
-    }
+    wl_display_roundtrip(m_display);
 }
 
 PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, int widgetId)
 {
-    // FIXME: How much of this can be moved directly into WaylandSurface ctor or ::create()?
-    struct wl_surface* wlSurface = wl_compositor_create_surface(m_compositor);
-    EGLNativeWindowType nativeWindow = wl_egl_window_create(wlSurface, width, height);
-    EGLSurface eglSurface = eglCreateWindowSurface(m_eglDisplay, m_eglConfig, nativeWindow, nullptr);
-
-    wl_wkgtk_set_surface_for_widget(m_wkgtk, wlSurface, widgetId);
-    wl_display_roundtrip(nativeDisplay());
-
-    return WaylandSurface::create(m_eglContext, eglSurface, wlSurface, nativeWindow);
+    struct wl_surface* surface = wl_compositor_create_surface(m_compositor);
+    EGLNativeWindowType native = wl_egl_window_create(surface, width, height);
+    OwnPtr<WaylandSurface> wlSurface = WaylandSurface::create(surface, native);
+    wl_wkgtk_set_surface_for_widget(m_wkgtk, surface, widgetId);
+    return wlSurface.release();
 }
 
 void WaylandDisplay::destroySurface(WaylandSurface* surface)
 {
     if (surface) {
-        eglMakeCurrent(m_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-
         wl_egl_window_destroy(surface->nativeWindowHandle());
         wl_surface_destroy(surface->surface());
     }

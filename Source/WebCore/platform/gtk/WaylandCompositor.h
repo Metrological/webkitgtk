@@ -40,8 +40,6 @@
 #include <GLES2/gl2ext.h>
 #include <cairo.h>
 #include <cairo-gl.h>
-#define BUILD_WAYLAND
-#include <bcm_host.h>
 
 #include <wtf/HashMap.h>
 
@@ -59,23 +57,12 @@ struct NestedDisplay {
     struct wl_display* wlDisplay;         // Main Wayland display
     struct wl_display* childDisplay;      // Nested display
     EGLDisplay eglDisplay;                // EGL display
+    EGLConfig eglConfig;                  // EGL configuration
+    EGLContext eglCtx;                    // EGL context
+    cairo_device_t* eglDevice;            // EGL cairo device
     struct wl_global* wlGlobal;           // Wayland display global
     struct wl_global* wkgtkGlobal;        // Wayland webkitgtk interface global
     GSource* eventSource;                 // Display event source
-
-    DISPMANX_DISPLAY_HANDLE_T dispmanxDisplay;
-    struct {
-        int readfd;
-        int writefd;
-        struct wl_event_source* source;
-    } rpiFlipPipe;
-
-    struct {
-        EGLint width, height;
-        DISPMANX_UPDATE_HANDLE_T update;
-        DISPMANX_RESOURCE_HANDLE_T resource;
-        DISPMANX_ELEMENT_HANDLE_T element;
-    } renderer;
 };
 
 struct NestedBuffer {
@@ -94,6 +81,9 @@ struct NestedBufferReference {
 struct NestedSurface {
     WaylandCompositor* compositor;        // Nested compositor instance
     struct NestedBuffer* buffer;          // Last attached buffer (pending buffer)
+    GLuint texture;                       // GL texture for the surface
+    EGLImageKHR* image;                   // EGL Image for texture
+    cairo_surface_t* cairoSurface;        // Cairo surface for GL texture
     struct wl_list frameCallbackList;     // Pending frame callback list
     GtkWidget* widget;                    // widget associated with this surface
     struct wl_listener bufferDestroyListener; // Pending buffer destroy listener
@@ -117,9 +107,6 @@ public:
     void removeWidget(GtkWidget*);
     int getWidgetId(GtkWidget*);
     cairo_surface_t* cairoSurfaceForWidget(GtkWidget*);
-
-    void queueWidgetRedraw();
-    bool redraw(GtkWidget*);
 
     // Wayland Webkit extension interface
     static void wkgtkSetSurfaceForWidget(struct wl_client*, struct wl_resource*, struct wl_resource*, uint32_t);
@@ -149,11 +136,6 @@ private:
     static struct NestedDisplay* createNestedDisplay();
     static void destroyNestedDisplay(struct NestedDisplay*);
     bool initialize();
-
-    // RPi flip pipe magic
-    static void rpiFlipPipeUpdateComplete(DISPMANX_UPDATE_HANDLE_T, void*);
-    static int rpiFlipPipeHandler(int, uint32_t, void*);
-    static bool initializeRPiFlipPipe(WaylandCompositor*);
 
     // Global binding
     static void wkgtkBind(struct wl_client*, void*, uint32_t, uint32_t);

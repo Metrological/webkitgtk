@@ -44,15 +44,15 @@ class WaylandDisplay
 {
 public:
     static WaylandDisplay* instance();
-
-    // Wayland registry listener interface callbacks
-    static void registryHandleGlobal(void*, struct wl_registry*, uint32_t, const char*, uint32_t);
-    static void registryHandleGlobalRemove(void*, struct wl_registry*, uint32_t);
+    static struct wl_display* nativeDisplay();
 
     // Display interface
     PassOwnPtr<WaylandSurface> createSurface(int, int, int);
     void destroySurface(WaylandSurface*);
-    struct wl_display* nativeDisplay() { return m_display; }
+
+    // Wayland registry listener interface callbacks
+    static void registryHandleGlobal(void*, struct wl_registry*, uint32_t, const char*, uint32_t);
+    static void registryHandleGlobalRemove(void*, struct wl_registry*, uint32_t);
 
 private:
     WaylandDisplay(struct wl_display*);
@@ -64,6 +64,13 @@ private:
     struct wl_registry* m_registry;
     struct wl_compositor* m_compositor;
     struct wl_wkgtk* m_wkgtk;
+
+    EGLDisplay m_eglDisplay;
+    EGLConfig m_eglConfig;
+    EGLContext m_eglContext;
+
+    static WaylandDisplay* m_instance;
+    static struct wl_display* m_nativeDisplay;
 };
 
 }

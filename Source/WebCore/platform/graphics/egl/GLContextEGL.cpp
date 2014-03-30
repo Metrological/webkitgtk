@@ -240,6 +240,11 @@ PassOwnPtr<GLContextEGL> GLContextEGL::createContext(EGLNativeWindowType window,
     return context.release();
 }
 
+PassOwnPtr<GLContextEGL> GLContextEGL::adoptWindowContext(EGLContext context, EGLSurface surface)
+{
+    return adoptPtr(new GLContextEGL(context, surface, WindowSurface));
+}
+
 GLContextEGL::GLContextEGL(EGLContext context, EGLSurface surface, EGLSurfaceType type)
     : m_context(context)
     , m_surface(surface)

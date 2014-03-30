@@ -29,15 +29,18 @@
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
+#include "GLContextEGL.h"
 #include "WaylandDisplay.h"
 
 namespace WebCore {
 
-WaylandSurface::WaylandSurface(struct wl_surface* surface, EGLNativeWindowType native)
-    : m_surface(surface)
-    , m_native(native)
+WaylandSurface::WaylandSurface(EGLContext eglContext, EGLSurface eglSurface, struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow)
+    : m_eglContext(eglContext)
+    , m_eglSurface(eglSurface)
+    , m_wlSurface(wlSurface)
+    , m_frameCallback(nullptr)
+    , m_nativeWindow(nativeWindow)
 {
-
 }
 
 WaylandSurface::~WaylandSurface()
@@ -45,6 +48,27 @@ WaylandSurface::~WaylandSurface()
     WaylandDisplay *display = WaylandDisplay::instance();
     if (display)
         display->destroySurface(this);
+}
+
+PassOwnPtr<GLContextEGL> WaylandSurface::createGLContext()
+{
+    return GLContextEGL::adoptWindowContext(m_eglContext, m_eglSurface);
+}
+
+static const struct wl_callback_listener frameListener = {
+    WaylandSurface::frameCallback
+};
+
+void WaylandSurface::requestFrame()
+{
+    m_frameCallback = wl_surface_frame(m_wlSurface);
+    wl_callback_add_listener(m_frameCallback, &frameListener, this);
+}
+
+void WaylandSurface::frameCallback(void* data, struct wl_callback*, uint32_t)
+{
+    WaylandSurface* surface = static_cast<WaylandSurface*>(data);
+    surface->m_frameCallback = nullptr;
 }
 
 }

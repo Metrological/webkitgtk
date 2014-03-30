@@ -99,6 +99,7 @@ class WaylandCompositor {
 public:
     enum CompositorType {
         EGL,
+        DispmanX,
     };
 
     static WaylandCompositor* instance();

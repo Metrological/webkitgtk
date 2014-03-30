@@ -29,7 +29,7 @@
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
-#include "WaylandCompositorEGL.h"
+#include "WaylandCompositorDispmanX.h"
 #include "WaylandDisplayEventSource.h"
 #include "WaylandWebkitGtkServerProtocol.h"
 
@@ -203,7 +203,7 @@ WaylandCompositor* WaylandCompositor::instance()
     if (compositor)
         return compositor;
 
-    compositor = new WaylandCompositorEGL();
+    compositor = new WaylandCompositorDispmanX();
     if (!compositor->initialize()) {
         delete compositor;
         return nullptr;

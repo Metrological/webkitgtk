@@ -34,6 +34,7 @@ public:
     enum EGLSurfaceType { PbufferSurface, WindowSurface, PixmapSurface };
     static PassOwnPtr<GLContextEGL> createContext(EGLNativeWindowType, GLContext* sharingContext = 0);
     static PassOwnPtr<GLContextEGL> createWindowContext(EGLNativeWindowType, GLContext* sharingContext);
+    static PassOwnPtr<GLContextEGL> adoptWindowContext(EGLContext, EGLSurface);
 
     virtual ~GLContextEGL();
     virtual bool makeContextCurrent();

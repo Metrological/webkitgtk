@@ -39,24 +39,35 @@
 
 namespace WebCore {
 
+class GLContextEGL;
+
 class WaylandSurface
 {
 public:
-    static PassOwnPtr<WaylandSurface> create(struct wl_surface* surface, EGLNativeWindowType native)
+    static PassOwnPtr<WaylandSurface> create(EGLContext eglContext, EGLSurface eglSurface, struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow);
     {
-        return adoptPtr(new WaylandSurface(surface, native));
+        return adoptPtr(new WaylandSurface(eglContext, eglSurface, wlSurface, nativeWindow));
     }
     virtual ~WaylandSurface();
 
     // Surface interface
-    EGLNativeWindowType nativeWindowHandle() { return m_native; }
-    struct wl_surface* surface() { return m_surface; }
+    struct wl_surface* surface() { return m_wlSurface; }
+    EGLNativeWindowType nativeWindowHandle() { return m_nativeWindow; }
+    EGLSurface eglSurface() { return m_eglSurface; }
+
+    PassOwnPtr<GLContextEGL> createGLContext();
+
+    void requestFrame();
+    static void frameCallback(void*, struct wl_callback*, uint32_t);
 
 private:
-    WaylandSurface(struct wl_surface*, EGLNativeWindowType);
+    WaylandSurface(EGLContext, EGLSurface, struct wl_surface*, EGLNativeWindowType);
 
-    struct wl_surface* m_surface;
-    EGLNativeWindowType m_native;
+    EGLContext m_eglContext;
+    EGLSurface m_eglSurface;
+    struct wl_surface* m_wlSurface;
+    struct wl_callback* m_frameCallback;
+    EGLNativeWindowType m_nativeWindow;
 };
 
 }

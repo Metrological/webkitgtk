@@ -82,7 +82,7 @@
 #endif
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND) && !defined(GTK_API_VERSION_2)
 #include <WebCore/WaylandCompositor.h>
-#include <WebCore/WaylandCompositorEGL.h>
+#include <WebCore/WaylandCompositorDispmanX.h>
 #endif
 #endif
 
@@ -478,7 +478,7 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
         if (!priv->waylandCompositor)
             return false;
 
-        WaylandCompositorEGL::RenderingContext renderingContext = { GTK_WIDGET(webViewBase), cr, clipRect };
+        WaylandCompositorDispmanX::RenderingContext renderingContext(GTK_WIDGET(webViewBase));
         priv->waylandCompositor->render(renderingContext);
         return true;
     }

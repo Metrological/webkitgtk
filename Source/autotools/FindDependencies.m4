@@ -209,6 +209,7 @@ if test "$enable_wayland_target" != "no"; then
         wayland-client >= 1.3.9
         wayland-server >= 1.3.9
         wayland-egl >= 10
+        bcm_host
     ], [enable_wayland_target=yes], [
         if test "$enable_wayland_target" = "yes"; then
             AC_MSG_ERROR([GTK+ Wayland dependency (gtk+-wayland-$GTK_API_VERSION >= gtk3_wayland_required_version) not found.])

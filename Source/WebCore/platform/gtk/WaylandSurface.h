@@ -44,7 +44,7 @@ class GLContextEGL;
 class WaylandSurface
 {
 public:
-    static PassOwnPtr<WaylandSurface> create(EGLContext eglContext, EGLSurface eglSurface, struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow);
+    static PassOwnPtr<WaylandSurface> create(EGLContext eglContext, EGLSurface eglSurface, struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow)
     {
         return adoptPtr(new WaylandSurface(eglContext, eglSurface, wlSurface, nativeWindow));
     }

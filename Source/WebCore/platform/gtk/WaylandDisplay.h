@@ -44,7 +44,7 @@ class WaylandDisplay
 {
 public:
     static WaylandDisplay* instance();
-    static struct wl_display* nativeDisplay();
+    struct wl_display* nativeDisplay() { return m_display; }
 
     // Display interface
     PassOwnPtr<WaylandSurface> createSurface(int, int, int);

@@ -95,7 +95,7 @@ WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
         EGL_NONE
     };
 
-    m_eglDisplay = eglGetDisplay(nativeDisplay());
+    m_eglDisplay = eglGetDisplay(m_display);
     if (m_eglDisplay == EGL_NO_DISPLAY) {
         g_warning("eglGetDisplay EGL_NO_DISPLAY");
         return;
@@ -132,7 +132,7 @@ PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, 
     EGLSurface eglSurface = eglCreateWindowSurface(m_eglDisplay, m_eglConfig, nativeWindow, nullptr);
 
     wl_wkgtk_set_surface_for_widget(m_wkgtk, wlSurface, widgetId);
-    wl_display_roundtrip(nativeDisplay());
+    wl_display_roundtrip(m_display);
 
     return WaylandSurface::create(m_eglContext, eglSurface, wlSurface, nativeWindow);
 }

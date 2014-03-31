@@ -76,7 +76,7 @@ bool WaylandCompositorDispmanX::initializeRPiFlipPipe()
     m_rpiFlipPipe.readfd = fd[0];
     m_rpiFlipPipe.writefd = fd[1];
 
-    struct wl_event_loop* loop = wl_display_get_event_loop(m_display->childDisplay);
+    struct wl_event_loop* loop = wl_display_get_event_loop(m_display.childDisplay);
     m_rpiFlipPipe.source = wl_event_loop_add_fd(loop, m_rpiFlipPipe.readfd,
         WL_EVENT_READABLE, rpiFlipPipeHandler, this);
 
@@ -102,7 +102,7 @@ void WaylandCompositorDispmanX::attachSurface(NestedSurface* surfaceBase, struct
     NestedSurfaceDispmanX* surface = static_cast<NestedSurfaceDispmanX*>(surfaceBase);
 
     EGLint format;
-    if (!eglQueryBuffer(m_display->eglDisplay, bufferResource, EGL_TEXTURE_FORMAT, &format))
+    if (!eglQueryBuffer(m_display.eglDisplay, bufferResource, EGL_TEXTURE_FORMAT, &format))
         return;
     if (format != EGL_TEXTURE_RGB && format != EGL_TEXTURE_RGBA)
         return;
@@ -149,7 +149,7 @@ void WaylandCompositorDispmanX::commitSurface(NestedSurface* surfaceBase, struct
     NestedBuffer::reference(&surface->bufferRef, surface->buffer);
 
     EGLint width, height;
-    EGLDisplay eglDisplay = m_display->eglDisplay;
+    EGLDisplay eglDisplay = m_display.eglDisplay;
     if (!eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_WIDTH, &width)
         || !eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height))
         return;
@@ -164,7 +164,7 @@ void WaylandCompositorDispmanX::commitSurface(NestedSurface* surfaceBase, struct
     }
 
     wl_list_init(&surface->frameCallbackList);
-    wl_display_flush_clients(m_display->childDisplay);
+    wl_display_flush_clients(m_display.childDisplay);
     fprintf(stderr, "\tsurface committed\n");
 }
 
@@ -192,8 +192,8 @@ void WaylandCompositorDispmanX::render(WaylandCompositor::RenderingContext& cont
     if (!targetSurface || !targetSurface->buffer)
         return;
 
-    if (!eglQueryBuffer(m_display->eglDisplay, targetSurface->buffer->resource, EGL_WIDTH, &m_renderer.width)
-        || !eglQueryBuffer(m_display->eglDisplay, targetSurface->buffer->resource, EGL_HEIGHT, &m_renderer.height))
+    if (!eglQueryBuffer(m_display.eglDisplay, targetSurface->buffer->resource, EGL_WIDTH, &m_renderer.width)
+        || !eglQueryBuffer(m_display.eglDisplay, targetSurface->buffer->resource, EGL_HEIGHT, &m_renderer.height))
         return;
 
     m_renderer.resource = vc_dispmanx_get_handle_from_wl_buffer(targetSurface->buffer->resource);
@@ -265,11 +265,11 @@ bool WaylandCompositorDispmanX::initializeEGL()
     static const EGLenum glAPI = EGL_OPENGL_API;
 #endif
 
-    m_display->eglDisplay = eglGetDisplay(m_display->wlDisplay);
-    if (m_display->eglDisplay == EGL_NO_DISPLAY)
+    m_display.eglDisplay = eglGetDisplay(m_display.wlDisplay);
+    if (m_display.eglDisplay == EGL_NO_DISPLAY)
         return false;
 
-    if (eglInitialize(m_display->eglDisplay, nullptr, nullptr) == EGL_FALSE)
+    if (eglInitialize(m_display.eglDisplay, nullptr, nullptr) == EGL_FALSE)
         return false;
 
     if (eglBindAPI(glAPI) == EGL_FALSE)

@@ -5,10 +5,13 @@
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
+#include "wayland-dispmanx-client-protocol.h"
 #define BUILD_WAYLAND
 #include <bcm_host.h>
 
 namespace WebCore {
+
+struct NestedSurfaceDispmanX;
 
 class WaylandCompositorDispmanX : public WaylandCompositor {
 public:
@@ -29,10 +32,13 @@ public:
     virtual void render(WaylandCompositor::RenderingContext&) override;
 
 private:
+    friend struct NestedSurfaceDispmanX;
+
     virtual bool initialize() override;
     virtual bool initializeEGL() override;
     virtual NestedSurface* createNestedSurface() override;
 
+#if 0
     bool initializeRPiFlipPipe();
     static void rpiFlipPipeUpdateComplete(DISPMANX_UPDATE_HANDLE_T, void*);
     static int rpiFlipPipeHandler(int, uint32_t, void*);
@@ -50,6 +56,14 @@ private:
         DISPMANX_RESOURCE_HANDLE_T resource;
         DISPMANX_ELEMENT_HANDLE_T element;
     } m_renderer;
+#endif
+
+    static const struct wl_registry_listener m_registryListener;
+
+    struct wl_registry* wl_registry;
+    struct wl_compositor* wl_compositor;
+    struct wl_subcompositor* wl_subcompositor;
+    struct wl_dispmanx* wl_dispmanx;
 };
 
 } // namespace WebCore

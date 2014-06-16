@@ -478,7 +478,8 @@ AC_SUBST([OPENGL_LIBS])
 
 enable_accelerated_canvas=no
 if test "$enable_accelerated_compositing" = "yes" && test "$found_opengl" = "yes"; then
-    CAIRO_GL_LIBS="cairo-gl"
+    # FIXME: Hah.
+    CAIRO_GL_LIBS="cairo-egl"
     if test "$enable_glx" = "yes"; then
         CAIRO_GL_LIBS="$CAIRO_GL_LIBS cairo-glx"
     fi

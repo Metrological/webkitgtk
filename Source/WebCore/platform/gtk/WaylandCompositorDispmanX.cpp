@@ -4,7 +4,10 @@
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
 #include <fcntl.h>
+#include <gdk/gdk.h>
+#include <gdk/gdkwayland.h>
 #include <sys/time.h>
+#include <wayland-client.h>
 
 #if !defined(PFNEGLQUERYWAYLANDBUFFERWL)
 typedef EGLBoolean (EGLAPIENTRYP PFNEGLQUERYWAYLANDBUFFERWL)(EGLDisplay, struct wl_resource*, EGLint, EGLint*);
@@ -28,19 +31,71 @@ namespace WebCore {
 struct NestedSurfaceDispmanX : NestedSurface {
     NestedSurfaceDispmanX(WaylandCompositor* compositor)
         : NestedSurface(compositor)
+        , subsurfaceSurface(nullptr)
+        , subsurface(nullptr)
     { }
+    // FIXME: Destroy subsurface.
     virtual ~NestedSurfaceDispmanX() { }
+
+    virtual void setWidget(GtkWidget*) override;
+    virtual NestedBuffer* createBuffer(struct wl_resource*) override;
+
+    struct wl_surface* subsurfaceSurface;
+    struct wl_subsurface* subsurface;
 };
+
+struct NestedBufferDispmanX : NestedBuffer {
+    NestedBufferDispmanX(struct wl_resource* resource)
+        : NestedBuffer(resource)
+        , clientBuffer(nullptr)
+    {
+    }
+
+    struct wl_buffer* clientBuffer;
+};
+
+void NestedSurfaceDispmanX::setWidget(GtkWidget* widget)
+{
+    NestedSurface::setWidget(widget);
+
+    WaylandCompositorDispmanX* dispmanxCompositor = static_cast<WaylandCompositorDispmanX*>(compositor);
+    subsurfaceSurface = wl_compositor_create_surface(dispmanxCompositor->wl_compositor);
+    subsurface = wl_subcompositor_get_subsurface(dispmanxCompositor->wl_subcompositor, subsurfaceSurface,
+        gdk_wayland_window_get_wl_surface(gtk_widget_get_window(widget)));
+    fprintf(stderr, "NestedSurfaceDispmanX::setWidget(): acquired subsurface %p, its surface %p\n",
+        subsurface, subsurfaceSurface);
+    wl_subsurface_set_desync(subsurface);
+
+    gtk_widget_queue_draw(widget);
+}
+
+NestedBuffer* NestedSurfaceDispmanX::createBuffer(struct wl_resource* resource)
+{
+    fprintf(stderr, "NestedSurfaceDispmanX::createBuffer resource %p, handle %d\n",
+        resource, vc_dispmanx_get_handle_from_wl_buffer(resource));
+    NestedBufferDispmanX* buffer = new NestedBufferDispmanX(resource);
+
+    EGLint width, height;
+    if (!eglQueryBuffer(compositor->eglDisplay(), resource, EGL_WIDTH, &width)
+        || !eglQueryBuffer(compositor->eglDisplay(), resource, EGL_HEIGHT, &height))
+        return nullptr;
+
+    buffer->clientBuffer = wl_dispmanx_create_proxy_buffer(static_cast<WaylandCompositorDispmanX*>(compositor)->wl_dispmanx,
+        vc_dispmanx_get_handle_from_wl_buffer(resource), width, height,
+        vc_dispmanx_get_format_from_wl_buffer(resource));
+    return buffer;
+}
 
 // Raspberry Pi flip pipe magic
 
-static uint64_t rpiGetCurrentTime()
+static uint64_t getCurrentTime()
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
+#if 0
 void WaylandCompositorDispmanX::rpiFlipPipeUpdateComplete(DISPMANX_UPDATE_HANDLE_T update, void* data)
 {
     WaylandCompositorDispmanX* compositor = static_cast<WaylandCompositorDispmanX*>(data);
@@ -88,24 +143,41 @@ bool WaylandCompositorDispmanX::initializeRPiFlipPipe()
 
     return true;
 }
+#endif
 
 WaylandCompositorDispmanX::WaylandCompositorDispmanX()
-    : m_dispmanxDisplay(0)
-    , m_rpiFlipPipe({ 0, 0, nullptr })
-    , m_renderer({ 0, 0, DISPMANX_NO_HANDLE, DISPMANX_NO_HANDLE, DISPMANX_NO_HANDLE })
+    : wl_registry(nullptr)
+    , wl_compositor(nullptr)
+    , wl_subcompositor(nullptr)
+    , wl_dispmanx(nullptr)
 {
 }
 
+const struct wl_registry_listener WaylandCompositorDispmanX::m_registryListener = {
+    // global
+    [](void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t)
+    {
+        WaylandCompositorDispmanX* compositor = static_cast<WaylandCompositorDispmanX*>(data);
+        if (strcmp(interface, "wl_compositor") == 0)
+            compositor->wl_compositor = static_cast<struct wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 3));
+        else if (strcmp(interface, "wl_subcompositor") == 0)
+            compositor->wl_subcompositor = static_cast<struct wl_subcompositor*>(wl_registry_bind(registry, name, &wl_subcompositor_interface, 1));
+        else if (strcmp(interface, "wl_dispmanx") == 0)
+            compositor->wl_dispmanx = static_cast<struct wl_dispmanx*>(wl_registry_bind(registry, name, &wl_dispmanx_interface, 1));
+    },
+
+    // global_remove
+    [](void*, struct wl_registry*, uint32_t)
+    {
+        // FIXME: if this can happen without the UI Process getting shut down we should probably
+        // destroy our cached display instance
+    }
+};
+
 void WaylandCompositorDispmanX::attachSurface(NestedSurface* surfaceBase, struct wl_client*, struct wl_resource* bufferResource, int32_t, int32_t)
 {
-    fprintf(stderr, "WaylandCompositorDispmanX::attachSurface\n");
+    // fprintf(stderr, "WaylandCompositorDispmanX::attachSurface\n");
     NestedSurfaceDispmanX* surface = static_cast<NestedSurfaceDispmanX*>(surfaceBase);
-
-    EGLint format;
-    if (!eglQueryBuffer(m_display.eglDisplay, bufferResource, EGL_TEXTURE_FORMAT, &format))
-        return;
-    if (format != EGL_TEXTURE_RGB && format != EGL_TEXTURE_RGBA)
-        return;
 
     // Remove references to any previous pending buffer for this surface
     if (surface->buffer) {
@@ -115,15 +187,15 @@ void WaylandCompositorDispmanX::attachSurface(NestedSurface* surfaceBase, struct
 
     // Make the new buffer the current pending buffer
     if (bufferResource) {
-        surface->buffer = NestedBuffer::fromResource(bufferResource);
+        surface->buffer = NestedBuffer::fromResource(surface, bufferResource);
         wl_signal_add(&surface->buffer->destroySignal, &surface->bufferDestroyListener);
     }
-    fprintf(stderr, "\tsurface attached\n");
+    //fprintf(stderr, "\tsurface attached\n");
 }
 
 void WaylandCompositorDispmanX::requestFrame(NestedSurface* surfaceBase, struct wl_client* client, uint32_t id)
 {
-    fprintf(stderr, "WaylandCompositorDispmanX::requestFrame\n");
+    // fprintf(stderr, "WaylandCompositorDispmanX::requestFrame\n");
     NestedSurfaceDispmanX* surface = static_cast<NestedSurfaceDispmanX*>(surfaceBase);
 
     NestedFrameCallback* callback = new NestedFrameCallback(wl_resource_create(client, &wl_callback_interface, 1, id));
@@ -135,12 +207,15 @@ void WaylandCompositorDispmanX::requestFrame(NestedSurface* surfaceBase, struct 
         }
     );
     wl_list_insert(surface->frameCallbackList.prev, &callback->link);
-    fprintf(stderr, "\tframe requested\n");
+    //fprintf(stderr, "\tframe requested\n");
 }
+
+static uint64_t lastCommitPrint = 0;
+static int commitCount = 0;
 
 void WaylandCompositorDispmanX::commitSurface(NestedSurface* surfaceBase, struct wl_client*)
 {
-    fprintf(stderr, "WaylandCompositorDispmanX::commitSurface %p\n", surfaceBase);
+    // fprintf(stderr, "WaylandCompositorDispmanX::commitSurface %p\n", surfaceBase);
     NestedSurfaceDispmanX* surface = static_cast<NestedSurfaceDispmanX*>(surfaceBase);
     if (!surface)
         return;
@@ -148,13 +223,17 @@ void WaylandCompositorDispmanX::commitSurface(NestedSurface* surfaceBase, struct
     // Make the pending buffer current 
     NestedBuffer::reference(&surface->bufferRef, surface->buffer);
 
-    EGLint width, height;
-    EGLDisplay eglDisplay = m_display.eglDisplay;
-    if (!eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_WIDTH, &width)
-        || !eglQueryBuffer(eglDisplay, surface->buffer->resource, EGL_HEIGHT, &height))
-        return;
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(surface->widget, &allocation);
+    wl_subsurface_set_position(surface->subsurface, allocation.x, allocation.y);
 
-    gtk_widget_set_size_request(surface->widget, width, height);
+    wl_surface_frame(surface->subsurfaceSurface);
+    wl_surface_attach(surface->subsurfaceSurface,
+        static_cast<NestedBufferDispmanX*>(surface->buffer)->clientBuffer, 0, 0);
+    wl_surface_commit(surface->subsurfaceSurface);
+
+    wl_list_remove(&surface->bufferDestroyListener.link);
+    surface->buffer = NULL;
 
     // Process frame callbacks for this surface so the client can render a new frame
     NestedFrameCallback *nc, *next;
@@ -165,15 +244,67 @@ void WaylandCompositorDispmanX::commitSurface(NestedSurface* surfaceBase, struct
 
     wl_list_init(&surface->frameCallbackList);
     wl_display_flush_clients(m_display.childDisplay);
-    fprintf(stderr, "\tsurface committed\n");
+    //fprintf(stderr, "\tsurface committed\n");
+
+    commitCount++;
+    uint64_t commitTime = getCurrentTime();
+    if (commitTime - lastCommitPrint >= 5000) {
+        if (lastCommitPrint == 0) {
+            lastCommitPrint = commitTime;
+            return;
+        }
+
+        g_print ("Committed %d times in the last 5 seconds - CPS %f\n", commitCount, commitCount / 5.0);
+        lastCommitPrint = commitTime;
+        commitCount = 0;
+    }
 }
+
+static uint64_t lastRenderPrint = 0;
+static int renderCount = 0;
 
 void WaylandCompositorDispmanX::render(WaylandCompositor::RenderingContext& contextBase)
 {
-    fprintf(stderr, "WaylandCompositorDispmanX::render\n");
     ASSERT(contextBase.type == WaylandCompositor::DispmanX);
     RenderingContext& context = static_cast<RenderingContext&>(contextBase);
+    g_print("WaylandCompositorDispmanX::render\n");
 
+    NestedSurface* targetSurface = nullptr;
+    NestedSurface* surface, * nextSurface;
+    wl_list_for_each_safe(surface, nextSurface, &m_surfaces, link) {
+        // FIXME: The GtkWidget should be guaranteed.
+        if (surface->widget == context.widget) {
+            targetSurface = surface;
+            break;
+        }
+    }
+
+    if (!targetSurface || !targetSurface->buffer)
+        return;
+
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(targetSurface->widget, &allocation);
+
+    NestedSurfaceDispmanX* dispmanxSurface = static_cast<NestedSurfaceDispmanX*>(targetSurface);
+    wl_subsurface_set_position(dispmanxSurface->subsurface, allocation.x, allocation.y);
+
+    wl_surface_attach(dispmanxSurface->subsurfaceSurface,
+        static_cast<NestedBufferDispmanX*>(targetSurface->buffer)->clientBuffer, 0, 0);
+    wl_surface_commit(dispmanxSurface->subsurfaceSurface);
+
+    wl_list_remove(&targetSurface->bufferDestroyListener.link);
+    targetSurface->buffer = NULL;
+
+    // Process frame callbacks for this surface so the client can render a new frame
+    NestedFrameCallback *nc, *next;
+    wl_list_for_each_safe(nc, next, &surface->frameCallbackList, link) {
+        wl_callback_send_done(nc->resource, 0);
+        wl_resource_destroy(nc->resource);
+    }
+
+    wl_list_init(&surface->frameCallbackList);
+    wl_display_flush_clients(m_display.childDisplay);
+#if 0
     static VC_DISPMANX_ALPHA_T alpha = {
         static_cast<DISPMANX_FLAGS_ALPHA_T>(DISPMANX_FLAGS_ALPHA_FROM_SOURCE | DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS),
         255, 0
@@ -232,8 +363,20 @@ void WaylandCompositorDispmanX::render(WaylandCompositor::RenderingContext& cont
 
     m_renderer.update = DISPMANX_NO_HANDLE;
     m_renderer.resource = DISPMANX_NO_HANDLE;
+#endif
 
-    fprintf(stderr, "\trendered\n");
+    renderCount++;
+    uint64_t renderTime = getCurrentTime();
+    if (renderTime - lastRenderPrint >= 5000) {
+        if (lastRenderPrint == 0) {
+            lastRenderPrint = renderTime;
+            return;
+        }
+
+        g_print ("Rendered %d times in the last 5 seconds - RPS %f\n", renderCount, renderCount / 5.0);
+        lastRenderPrint = renderTime;
+        renderCount = 0;
+    }
 }
 
 bool WaylandCompositorDispmanX::initialize()
@@ -243,6 +386,17 @@ bool WaylandCompositorDispmanX::initialize()
     if (!WaylandCompositor::initialize())
         return false;
 
+    fprintf(stderr, "WaylandCompositorDispmanX::initialize\n");
+    wl_registry = wl_display_get_registry(m_display.wlDisplay);
+    fprintf(stderr, "\tdisplay %p, registry %p\n", m_display.wlDisplay, wl_registry);
+    wl_registry_add_listener(wl_registry, &m_registryListener, this);
+    fprintf(stderr, "\tdispatching\n");
+    wl_display_dispatch(m_display.wlDisplay);
+
+    fprintf(stderr, "WaylandCompositorDispmanX::initialize(): compositor %p, subcompositor %p, dispmanx %p\n",
+        wl_compositor, wl_subcompositor, wl_dispmanx);
+
+#if 0
     if (!initializeRPiFlipPipe()) {
         g_warning("Could not initalize RPi flip pipe");
         return false;
@@ -253,6 +407,7 @@ bool WaylandCompositorDispmanX::initialize()
         g_warning("Could not open DispmanX display");
         return false;
     }
+#endif
 
     return true;
 }
@@ -289,6 +444,7 @@ NestedSurface* WaylandCompositorDispmanX::createNestedSurface()
     return new NestedSurfaceDispmanX(this);
 }
 
+#if 0
 void WaylandCompositorDispmanX::queueWidgetRedraw()
 {
     fprintf(stderr, "WaylandCompositorDispmanX::queueWidgetRedraw\n");
@@ -300,6 +456,7 @@ void WaylandCompositorDispmanX::queueWidgetRedraw()
     }
     fprintf(stderr, "\tqueued\n");
 }
+#endif
 
 } // namespace WebCore
 

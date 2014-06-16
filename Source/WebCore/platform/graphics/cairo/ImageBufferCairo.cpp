@@ -45,9 +45,15 @@
 
 #if ENABLE(ACCELERATED_2D_CANVAS)
 #include "GLContext.h"
-#include "OpenGLShims.h"
 #include "TextureMapperGL.h"
 #include <cairo-gl.h>
+#if USE(OPENGL_ES_2)
+#include "OpenGLESShims.h"
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#else
+#include "OpenGLShims.h"
+#endif
 #endif
 
 using namespace std;
@@ -72,8 +78,8 @@ PassRefPtr<cairo_surface_t> createCairoGLSurface(const IntSize& size, uint32_t& 
     // from a pre-existing surface.
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 

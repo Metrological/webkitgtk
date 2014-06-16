@@ -49,13 +49,17 @@ typedef EGLBoolean (EGLAPIENTRYP PFNEGLUNBINDWAYLANDDISPLAYWL)(EGLDisplay, struc
 static PFNEGLBINDWAYLANDDISPLAYWL eglBindDisplay = nullptr;
 static PFNEGLUNBINDWAYLANDDISPLAYWL eglUnbindDisplay = nullptr;
 
-NestedBuffer* NestedBuffer::fromResource(struct wl_resource* resource)
+NestedBuffer::~NestedBuffer()
+{
+}
+
+NestedBuffer* NestedBuffer::fromResource(NestedSurface* surface, struct wl_resource* resource)
 {
     struct wl_listener* listener = wl_resource_get_destroy_listener(resource, destroyHandler);
     if (listener)
         return wl_container_of(listener, static_cast<NestedBuffer*>(nullptr), destroyListener);
 
-    return new NestedBuffer(resource);
+    return surface->createBuffer(resource);
 }
 
 void NestedBuffer::reference(NestedSurface::BufferReference* ref, NestedBuffer* buffer)
@@ -124,6 +128,16 @@ NestedSurface::~NestedSurface()
 
     // Unlink this surface from the compositor's surface list
     wl_list_remove(&link);
+}
+
+void NestedSurface::setWidget(GtkWidget* widget)
+{
+    this->widget = widget;
+}
+
+NestedBuffer* NestedSurface::createBuffer(struct wl_resource* resource)
+{
+    return new NestedBuffer(resource);
 }
 
 static const struct wl_surface_interface surfaceInterface = {
@@ -199,6 +213,7 @@ static const struct wl_wkgtk_interface wkgtkInterface = {
 
 WaylandCompositor* WaylandCompositor::instance()
 {
+    fprintf(stderr, "WaylandCompositor::instance()\n");
     static WaylandCompositor* compositor = nullptr;
     if (compositor)
         return compositor;
@@ -237,6 +252,7 @@ WaylandCompositor::~WaylandCompositor()
 
 bool WaylandCompositor::initialize()
 {
+    fprintf(stderr, "WaylandCompositor::initialize\n");
     GdkDisplay* gdkDisplay = gdk_display_manager_get_default_display(gdk_display_manager_get());
     struct wl_display* wlDisplay = gdk_wayland_display_get_wl_display(gdkDisplay);
     if (!wlDisplay)
@@ -347,7 +363,7 @@ void WaylandCompositor::setSurfaceForWidget(struct wl_client*, struct wl_resourc
             // Associate the new surface with the widget, the client is responsible
             // for destroying any previous surface created for this widget
             m_widgetHashMap.set(widget, surface);
-            surface->widget = widget;
+            surface->setWidget(widget);
             break;
         }
     }

@@ -41,12 +41,16 @@
 
 namespace WebCore {
 
+struct NestedBuffer;
 class WaylandCompositor;
 
 // Nested Wayland compositor surface
 struct NestedSurface {
     NestedSurface(WaylandCompositor*);
     virtual ~NestedSurface();
+
+    virtual void setWidget(GtkWidget*);
+    virtual NestedBuffer* createBuffer(struct wl_resource*);
 
     WaylandCompositor* compositor;        // Nested compositor instance
     struct NestedBuffer* buffer;          // Last attached buffer (pending buffer)
@@ -72,8 +76,9 @@ struct NestedBuffer {
         destroyListener.notify = destroyHandler;
         wl_resource_add_destroy_listener(resource, &destroyListener);
     }
+    virtual ~NestedBuffer();
 
-    static struct NestedBuffer* fromResource(struct wl_resource*);
+    static struct NestedBuffer* fromResource(NestedSurface*, struct wl_resource*);
     static void reference(NestedSurface::BufferReference*, struct NestedBuffer*);
     static void destroyHandler(struct wl_listener*, void*);
 

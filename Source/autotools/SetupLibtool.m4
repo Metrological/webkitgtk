@@ -6,11 +6,7 @@ AC_SUBST([LIBJAVASCRIPTCOREGTK_VERSION])
 AC_SUBST([LIBWEBKIT2GTK_VERSION])
 
 if test -z "$AR_FLAGS"; then
-    if "${AR:-ar}" -V | grep -q 'GNU ar'; then
-        AR_FLAGS="cruT"
-    else
-        AR_FLAGS="cru"
-    fi
+    AR_FLAGS="cru"
 fi
 AC_SUBST([AR_FLAGS])
 

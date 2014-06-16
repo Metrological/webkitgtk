@@ -114,6 +114,12 @@ static gboolean mediaPlayerPrivateAudioChangeTimeoutCallback(MediaPlayerPrivateG
     return FALSE;
 }
 
+static GstBusSyncReply mediaPlayerPrivateSyncMessageCallback (GstBus * bus, GstMessage * message, MediaPlayerPrivateGStreamer* player)
+{
+  // TODO
+  return GST_BUS_PASS;
+}
+
 static void setAudioStreamPropertiesCallback(GstChildProxy*, GObject* object, gchar*,
     MediaPlayerPrivateGStreamer* player)
 {
@@ -213,7 +219,7 @@ bool initializeGStreamerAndRegisterWebKitElements()
     GRefPtr<GstElementFactory> srcFactory = gst_element_factory_find("webkitwebsrc");
     if (!srcFactory) {
         GST_DEBUG_CATEGORY_INIT(webkit_media_player_debug, "webkitmediaplayer", 0, "WebKit media player");
-        gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
+        // gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
     }
 
 #if ENABLE(MEDIA_SOURCE)
@@ -239,7 +245,6 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_seekTime(0)
     , m_changingRate(false)
     , m_endTime(numeric_limits<float>::infinity())
-    , m_isEndReached(false)
     , m_isStreaming(false)
     , m_mediaLocations(0)
     , m_mediaLocationCurrentIndex(0)
@@ -1894,10 +1899,11 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
     setStreamVolumeElement(GST_STREAM_VOLUME(m_playBin.get()));
 
     GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_playBin.get())));
+    gst_bus_set_sync_handler(bus.get(), (GstBusSyncHandler) mediaPlayerPrivateSyncMessageCallback, this, 0);
     gst_bus_add_signal_watch(bus.get());
     g_signal_connect(bus.get(), "message", G_CALLBACK(mediaPlayerPrivateMessageCallback), this);
 
-    g_object_set(m_playBin.get(), "mute", m_player->muted(), NULL);
+    g_object_set(m_playBin.get(), "mute", m_player->muted(), "flags", GST_PLAY_FLAG_NATIVE_VIDEO | GST_PLAY_FLAG_SOFT_VOLUME | GST_PLAY_FLAG_AUDIO | GST_PLAY_FLAG_VIDEO, NULL);
 
     g_signal_connect(m_playBin.get(), "notify::source", G_CALLBACK(mediaPlayerPrivateSourceChangedCallback), this);
     g_signal_connect(m_playBin.get(), "video-changed", G_CALLBACK(mediaPlayerPrivateVideoChangedCallback), this);

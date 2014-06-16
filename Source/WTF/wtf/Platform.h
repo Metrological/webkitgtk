@@ -662,7 +662,7 @@
 
 /* The JIT is enabled by default on all x86, x86-64, ARM & MIPS platforms except Win64. */
 #if !defined(ENABLE_JIT) \
-    && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)) \
+    && (CPU(X86) || CPU(X86_64) || CPU(ARM64) || CPU(MIPS)) \
     && (OS(DARWIN) || !COMPILER(GCC) || GCC_VERSION_AT_LEAST(4, 1, 0)) \
     && !OS(WINCE) \
     && !(OS(WINDOWS) && CPU(X86_64))
@@ -724,7 +724,7 @@
 #define ENABLE_DFG_JIT 1
 #endif
 /* Enable the DFG JIT on ARM, MIPS and SH4. */
-#if CPU(ARM_TRADITIONAL) || CPU(MIPS) || CPU(SH4)
+#if CPU(MIPS) || CPU(SH4)
 #define ENABLE_DFG_JIT 1
 #endif
 #endif

@@ -67,7 +67,6 @@ private:
 
     EGLDisplay m_eglDisplay;
     EGLConfig m_eglConfig;
-    EGLContext m_eglContext;
 
     static WaylandDisplay* m_instance;
     static struct wl_display* m_nativeDisplay;

@@ -90,11 +90,6 @@ WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
         EGL_NONE
     };
 
-    static const EGLint contextAttributes[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE
-    };
-
     m_eglDisplay = eglGetDisplay(m_display);
     if (m_eglDisplay == EGL_NO_DISPLAY) {
         g_warning("eglGetDisplay EGL_NO_DISPLAY");
@@ -116,16 +111,19 @@ WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
         g_warning("eglChooseConfig failed");
         return;
     }
-
-    m_eglContext = eglCreateContext(m_eglDisplay, m_eglConfig, EGL_NO_CONTEXT, contextAttributes);
-    if (m_eglContext == EGL_NO_CONTEXT) {
-        g_warning("eglCreateContext EGL_NO_CONTEXT");
-        return;
-    }
 }
 
 PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, int widgetId)
 {
+    static const EGLint contextAttributes[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE
+    };
+
+    EGLContext eglContext = eglCreateContext(m_eglDisplay, m_eglConfig, EGL_NO_CONTEXT, contextAttributes);
+    if (eglContext == EGL_NO_CONTEXT)
+        g_warning("eglCreateContext EGL_NO_CONTEXT");
+
     // FIXME: How much of this can be moved directly into WaylandSurface ctor or ::create()?
     struct wl_surface* wlSurface = wl_compositor_create_surface(m_compositor);
     EGLNativeWindowType nativeWindow = wl_egl_window_create(wlSurface, width, height);
@@ -134,7 +132,7 @@ PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, 
     wl_wkgtk_set_surface_for_widget(m_wkgtk, wlSurface, widgetId);
     wl_display_roundtrip(m_display);
 
-    return WaylandSurface::create(m_eglContext, eglSurface, wlSurface, nativeWindow);
+    return WaylandSurface::create(eglContext, eglSurface, wlSurface, nativeWindow);
 }
 
 void WaylandDisplay::destroySurface(WaylandSurface* surface)

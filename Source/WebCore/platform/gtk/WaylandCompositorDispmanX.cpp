@@ -66,7 +66,6 @@ void NestedSurfaceDispmanX::setWidget(GtkWidget* widget)
         gdk_wayland_window_get_wl_surface(gtk_widget_get_window(widget)));
     fprintf(stderr, "NestedSurfaceDispmanX::setWidget(): acquired subsurface %p, its surface %p\n",
         subsurface, subsurfaceSurface);
-    wl_subsurface_set_desync(subsurface);
 }
 
 NestedBuffer* NestedSurfaceDispmanX::createBuffer(struct wl_resource* resource)

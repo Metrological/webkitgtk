@@ -393,10 +393,6 @@ PassRefPtr<BitmapTexture> MediaPlayerPrivateGStreamerBase::updateTexture(Texture
                 glEGLImageTargetTexture2DOES (GL_TEXTURE_2D,
                     gst_egl_image_memory_get_image (mem));
 
-                GLuint error = glGetError ();
-                if (error != GL_NO_ERROR)
-                    LOG_ERROR("MediaPlayerPrivateGStreamerBase::updateTexture: glEGLImageTargetTexture2DOES returned 0x%04x\n", error);
-
                 m_orientation = gst_egl_image_memory_get_orientation (mem);
                 if (m_orientation != GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_NORMAL
                     && m_orientation != GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP) {

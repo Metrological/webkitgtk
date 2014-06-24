@@ -114,12 +114,6 @@ static gboolean mediaPlayerPrivateAudioChangeTimeoutCallback(MediaPlayerPrivateG
     return FALSE;
 }
 
-static GstBusSyncReply mediaPlayerPrivateSyncMessageCallback (GstBus * bus, GstMessage * message, MediaPlayerPrivateGStreamer* player)
-{
-  // TODO
-  return GST_BUS_PASS;
-}
-
 static void setAudioStreamPropertiesCallback(GstChildProxy*, GObject* object, gchar*,
     MediaPlayerPrivateGStreamer* player)
 {
@@ -1899,7 +1893,6 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
     setStreamVolumeElement(GST_STREAM_VOLUME(m_playBin.get()));
 
     GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_playBin.get())));
-    gst_bus_set_sync_handler(bus.get(), (GstBusSyncHandler) mediaPlayerPrivateSyncMessageCallback, this, 0);
     gst_bus_add_signal_watch(bus.get());
     g_signal_connect(bus.get(), "message", G_CALLBACK(mediaPlayerPrivateMessageCallback), this);
 

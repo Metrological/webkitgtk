@@ -40,6 +40,8 @@
 
 namespace WebCore {
 
+class GLContextEGL;
+
 class WaylandDisplay
 {
 public:
@@ -48,6 +50,7 @@ public:
 
     // Display interface
     PassOwnPtr<WaylandSurface> createSurface(int, int, int);
+    PassOwnPtr<GLContextEGL> createSharingGLContext();
     void destroySurface(WaylandSurface*);
 
     // Wayland registry listener interface callbacks

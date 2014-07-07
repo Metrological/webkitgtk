@@ -29,6 +29,7 @@
 
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
 
+#include "GLContextEGL.h"
 #include <wtf/OwnPtr.h>
 
 #include <wayland-egl.h>
@@ -123,6 +124,13 @@ PassOwnPtr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, 
     wl_display_roundtrip(m_display);
 
     return WaylandSurface::create(wlSurface, nativeWindow);
+}
+
+PassOwnPtr<GLContextEGL> WaylandDisplay::createSharingGLContext()
+{
+    struct wl_surface* wlSurface = wl_compositor_create_surface(m_compositor);
+    EGLNativeWindowType nativeWindow = wl_egl_window_create(wlSurface, 1, 1);
+    return GLContextEGL::createWindowContext(nativeWindow, nullptr);
 }
 
 void WaylandDisplay::destroySurface(WaylandSurface* surface)

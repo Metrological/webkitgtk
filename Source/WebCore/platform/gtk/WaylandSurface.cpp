@@ -34,10 +34,8 @@
 
 namespace WebCore {
 
-WaylandSurface::WaylandSurface(EGLContext eglContext, EGLSurface eglSurface, struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow)
-    : m_eglContext(eglContext)
-    , m_eglSurface(eglSurface)
-    , m_wlSurface(wlSurface)
+WaylandSurface::WaylandSurface(struct wl_surface* wlSurface, EGLNativeWindowType nativeWindow)
+    : m_wlSurface(wlSurface)
     , m_frameCallback(nullptr)
     , m_nativeWindow(nativeWindow)
 {
@@ -52,7 +50,7 @@ WaylandSurface::~WaylandSurface()
 
 PassOwnPtr<GLContextEGL> WaylandSurface::createGLContext()
 {
-    return GLContextEGL::adoptWindowContext(m_eglContext, m_eglSurface);
+    return GLContextEGL::createWindowContext(m_nativeWindow, GLContext::sharingContext());
 }
 
 static const struct wl_callback_listener frameListener = {

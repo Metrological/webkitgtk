@@ -33,8 +33,12 @@
 #if USE(3D_GRAPHICS)
 #include "GraphicsContext3D.h"
 #include "NotImplemented.h"
-#include <EGL/egl.h>
 #include <wtf/Vector.h>
+
+#if PLATFORM(WAYLAND)
+#include <wayland-egl.h>
+#endif
+#include <EGL/egl.h>
 
 namespace WebCore {
 

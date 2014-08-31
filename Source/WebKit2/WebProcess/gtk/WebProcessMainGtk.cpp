@@ -42,10 +42,8 @@ class WebProcessMain final: public ChildProcessMainBase {
 public:
     bool platformInitialize() override
     {
-#ifndef NDEBUG
         if (g_getenv("WEBKIT2_PAUSE_WEB_PROCESS_ON_LAUNCH"))
             sleep(30);
-#endif
 
         gtk_init(nullptr, nullptr);
 

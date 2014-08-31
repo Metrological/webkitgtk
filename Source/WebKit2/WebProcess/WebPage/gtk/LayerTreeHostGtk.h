@@ -34,9 +34,16 @@
 #include "TextureMapperLayer.h"
 #include <WebCore/GLContext.h>
 #include <WebCore/GraphicsLayerClient.h>
+
+#include <gdk/gdk.h>
+#include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/gobject/GMainLoopSource.h>
+
+#if PLATFORM(WAYLAND)
+#include <WebCore/WaylandSurface.h>
+#endif
 
 namespace WebKit {
 
@@ -94,6 +101,8 @@ private:
 
     WebCore::GLContext* glContext();
 
+    int getDisplayType();
+
     LayerTreeContext m_layerTreeContext;
     bool m_isValid;
     bool m_notifyAfterScheduledLayerFlush;
@@ -106,6 +115,11 @@ private:
     double m_lastFlushTime;
     bool m_layerFlushSchedulingEnabled;
     GMainLoopSource m_layerFlushTimerCallback;
+    int m_displayType;
+
+#if PLATFORM(WAYLAND)
+    std::unique_ptr<WebCore::WaylandSurface> m_wlSurface;
+#endif
 };
 
 } // namespace WebKit

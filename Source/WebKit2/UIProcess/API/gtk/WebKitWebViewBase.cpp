@@ -64,7 +64,10 @@
 #include <WebCore/Region.h>
 #include <gdk/gdk.h>
 #include <gdk/gdkkeysyms.h>
-#if defined(GDK_WINDOWING_X11)
+#if PLATFORM(WAYLAND)
+#include <gdk/gdkwayland.h>
+#endif
+#if PLATFORM(X11)
 #include <gdk/gdkx.h>
 #endif
 #include <memory>
@@ -76,8 +79,14 @@
 #include "WebFullScreenManagerProxy.h"
 #endif
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11)
+#if USE(TEXTURE_MAPPER_GL)
+#if PLATFORM(X11)
 #include <WebCore/RedirectedXCompositeWindow.h>
+#endif
+#if USE(EGL) && PLATFORM(WAYLAND)
+#include <WebCore/WaylandCompositor.h>
+#include <WebCore/WaylandCompositorEGL.h>
+#endif
 #endif
 
 // gtk_widget_get_scale_factor() appeared in GTK 3.10, but we also need
@@ -138,12 +147,37 @@ struct _WebKitWebViewBasePrivate {
     WebFullScreenClientGtk fullScreenClient;
 #endif
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11)
+#if USE(TEXTURE_MAPPER_GL)
+#if USE(EGL) && PLATFORM(WAYLAND)
+    WaylandCompositor* waylandCompositor;
+#endif
+#if PLATFORM(X11)
     OwnPtr<RedirectedXCompositeWindow> redirectedWindow;
+#endif
 #endif
 };
 
+enum DisplayType {
+  DISPLAY_TYPE_NONE = 0,
+  DISPLAY_TYPE_X11,
+  DISPLAY_TYPE_WAYLAND
+};
+
 WEBKIT_DEFINE_TYPE(WebKitWebViewBase, webkit_web_view_base, GTK_TYPE_CONTAINER)
+
+static DisplayType getDisplayType()
+{
+    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
+#if PLATFORM(WAYLAND)
+    if (GDK_IS_WAYLAND_DISPLAY(display))
+        return DISPLAY_TYPE_WAYLAND;
+#endif
+#if PLATFORM(X11)
+    if (GDK_IS_X11_DISPLAY(display))
+        return DISPLAY_TYPE_X11;
+#endif
+    return DISPLAY_TYPE_NONE;
+}
 
 #if !GTK_CHECK_VERSION(3, 13, 4)
 static void webkitWebViewBaseNotifyResizerSize(WebKitWebViewBase* webViewBase)
@@ -424,13 +458,18 @@ static void webkitWebViewBaseConstructed(GObject* object)
     WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(object)->priv;
     priv->pageClient = PageClientImpl::create(viewWidget);
     priv->dragAndDropHelper.setWidget(viewWidget);
-
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11)
-    GdkDisplay* display = gdk_display_manager_get_default_display(gdk_display_manager_get());
-    if (GDK_IS_X11_DISPLAY(display)) {
+#if USE(TEXTURE_MAPPER_GL)
+    DisplayType displayType = getDisplayType();
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+#if USE(EGL) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
+        priv->waylandCompositor = WaylandCompositor::instance();
+#endif
+    } else if (displayType == DISPLAY_TYPE_X11) {
+#if PLATFORM(X11)
         priv->redirectedWindow = RedirectedXCompositeWindow::create(IntSize(1, 1), RedirectedXCompositeWindow::DoNotCreateGLContext);
         if (priv->redirectedWindow)
             priv->redirectedWindow->setDamageNotifyCallback(redirectedWindowDamagedCallback, object);
+#endif
     }
 #endif
 
@@ -443,21 +482,39 @@ static bool webkitWebViewRenderAcceleratedCompositingResults(WebKitWebViewBase* 
     if (!drawingArea->isInAcceleratedCompositingMode())
         return false;
 
-#if PLATFORM(X11)
     // To avoid flashes when initializing accelerated compositing for the first
     // time, we wait until we know there's a frame ready before rendering.
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
-    if (!priv->redirectedWindow)
-        return false;
+    DisplayType displayType = getDisplayType();
 
-    cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
-    cairo_surface_t* surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
-    cairo_set_source_surface(cr, surface, 0, 0);
-    cairo_fill(cr);
-    return true;
-#else
-    return false;
+#if USE(EGL) && PLATFORM(WAYLAND)
+    if (displayType == DISPLAY_TYPE_WAYLAND) {
+        if (!priv->waylandCompositor)
+            return false;
+
+        WaylandCompositorEGL::RenderingContext renderingContext(GTK_WIDGET(webViewBase), cr, clipRect);
+        priv->waylandCompositor->render(renderingContext);
+        return true;
+    }
 #endif
+
+#if PLATFORM(X11)
+    if (displayType == DISPLAY_TYPE_X11) {
+        if (!priv->redirectedWindow)
+            return false;
+
+        cairo_surface_t* surface = priv->redirectedWindow->cairoSurfaceForWidget(GTK_WIDGET(webViewBase));
+        if (surface) {
+            cairo_rectangle(cr, clipRect->x, clipRect->y, clipRect->width, clipRect->height);
+            cairo_set_source_surface(cr, surface, 0, 0);
+            cairo_fill(cr);
+        }
+
+        return true;
+    }
+#endif
+
+    return false;
 }
 #endif
 
@@ -913,7 +970,10 @@ static void webkitWebViewBaseDestroy(GtkWidget* widget)
     WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(widget)->priv;
     if (priv->authenticationDialog)
         gtk_widget_destroy(priv->authenticationDialog);
-
+#if USE(TEXTURE_MAPPER_GL) && USE(EGL) && PLATFORM(WAYLAND)
+    if (priv->waylandCompositor)
+        priv->waylandCompositor->removeWidget(widget);
+#endif
     GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->destroy(widget);
 }
 
@@ -979,9 +1039,15 @@ void webkitWebViewBaseUpdatePreferences(WebKitWebViewBase* webkitWebViewBase)
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11)
+#if USE(TEXTURE_MAPPER_GL)
+#if PLATFORM(X11)
     if (priv->redirectedWindow)
         return;
+#endif
+#if USE(EGL) && PLATFORM(WAYLAND)
+    if (priv->waylandCompositor)
+        return;
+#endif
 #endif
 
     priv->pageProxy->preferences().setAcceleratedCompositingEnabled(false);
@@ -1006,9 +1072,18 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, WebCon
     priv->pageProxy = context->createWebPage(*priv->pageClient, WTF::move(webPageConfiguration));
     priv->pageProxy->initializeWebPage();
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(X11)
-    if (priv->redirectedWindow)
+#if USE(TEXTURE_MAPPER_GL)
+    DisplayType displayType = getDisplayType();
+#if USE(EGL) && PLATFORM(WAYLAND)
+    if (displayType == DISPLAY_TYPE_WAYLAND && priv->waylandCompositor) {
+            priv->waylandCompositor->addWidget(GTK_WIDGET(webkitWebViewBase), priv->pageProxy->pageID());
+            priv->pageProxy->setAcceleratedCompositingWindowId(WaylandCompositor::widgetID(GTK_WIDGET(webkitWebViewBase)));
+    }
+#endif
+#if PLATFORM(X11)
+    if (displayType == DISPLAY_TYPE_X11 && priv->redirectedWindow)
         priv->pageProxy->setAcceleratedCompositingWindowId(priv->redirectedWindow->windowId());
+#endif
 #endif
 
 #if HAVE(GTK_SCALE_FACTOR)

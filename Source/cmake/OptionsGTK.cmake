@@ -53,11 +53,6 @@ if (NOT GEOCLUE2_FOUND)
     find_package(GeoClue)
 endif ()
 
-if (ENABLE_X11_TARGET)
-    # We don't use find_package for GLX because it is part of -lGL, unlike EGL.
-    check_include_files("GL/glx.h" GLX_FOUND)
-endif ()
-
 WEBKIT_OPTION_BEGIN()
 WEBKIT_OPTION_DEFINE(ENABLE_PLUGIN_PROCESS_GTK2 "Whether to build WebKitPluginProcess2 to load GTK2 based plugins." ON)
 
@@ -224,14 +219,8 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
     endif ()
 endif ()
 
-if (ENABLE_WAYLAND_TARGET)
-    set(GTK3_REQUIRED_VERSION 3.12.0)
-else ()
-    set(GTK3_REQUIRED_VERSION 3.6.0)
-endif ()
-
-find_package(GTK3 ${GTK3_REQUIRED_VERSION} REQUIRED)
-find_package(GDK3 ${GTK3_REQUIRED_VERSION} REQUIRED)
+find_package(GTK3 3.6.0 REQUIRED)
+find_package(GDK3 3.6.0 REQUIRED)
 set(GTK_LIBRARIES ${GTK3_LIBRARIES})
 set(GTK_INCLUDE_DIRS ${GTK3_INCLUDE_DIRS})
 set(GDK_LIBRARIES ${GDK3_LIBRARIES})
@@ -266,6 +255,15 @@ endif ()
 # of the directories check_include_files() looks for in case OpenGL is
 # installed into a non-standard location.
 if (ENABLE_X11_TARGET)
+    add_definitions(-DWTF_PLATFORM_X11=1)
+    add_definitions(-DMOZ_X11=1)
+    if (WTF_OS_UNIX)
+        add_definitions(-DXP_UNIX)
+    endif ()
+
+    # We don't use find_package for GLX because it is part of -lGL, unlike EGL.
+    check_include_files("GL/glx.h" GLX_FOUND)
+
     set(REQUIRED_INCLUDES_OLD ${CMAKE_REQUIRED_INCLUDES})
     set(CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES} ${OPENGL_INCLUDE_DIR})
     set(CMAKE_REQUIRED_INCLUDES ${REQUIRED_INCLUDES_OLD})
@@ -273,6 +271,11 @@ if (ENABLE_X11_TARGET)
     if (GLX_FOUND)
         set(WTF_USE_GLX 1)
     endif ()
+endif ()
+
+if (ENABLE_WAYLAND_TARGET)
+    find_package(Wayland 1.4.0 REQUIRED)
+    add_definitions(-DWTF_PLATFORM_WAYLAND=1)
 endif ()
 
 if (EGL_FOUND)
@@ -288,6 +291,7 @@ if (OPENGL_FOUND AND (GLX_FOUND OR EGL_FOUND))
     set(WTF_USE_3D_GRAPHICS 1)
 
     add_definitions(-DWTF_USE_OPENGL=1)
+    add_definitions(-DWTF_USE_OPENGL_ES_2=1)
     add_definitions(-DWTF_USE_3D_GRAPHICS=1)
     add_definitions(-DWTF_USE_TEXTURE_MAPPER=1)
     add_definitions(-DWTF_USE_TEXTURE_MAPPER_GL=1)

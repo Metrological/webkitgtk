@@ -115,6 +115,17 @@ static uint64_t nameHashForShader(const char* name, size_t length)
 
 PassRefPtr<GraphicsContext3D> GraphicsContext3D::createForCurrentGLContext()
 {
+    static bool initialized = false;
+    static bool success = true;
+    if (!initialized) {
+#if !USE(OPENGL_ES_2)
+        success = initializeOpenGLShims();
+#endif
+        initialized = true;
+    }
+    if (!success)
+        return nullptr;
+
     RefPtr<GraphicsContext3D> context = adoptRef(new GraphicsContext3D(Attributes(), 0, GraphicsContext3D::RenderToCurrentGLContext));
     return context->m_private ? context.release() : 0;
 }

@@ -140,7 +140,6 @@ PassOwnPtr<GLContextEGL> GLContextEGL::createWindowContext(EGLNativeWindowType w
     EGLSurface surface = eglCreateWindowSurface(display, config, window, 0);
     if (surface == EGL_NO_SURFACE)
         return nullptr;
-
     return adoptPtr(new GLContextEGL(context, surface, WindowSurface));
 }
 
@@ -170,7 +169,9 @@ PassOwnPtr<GLContextEGL> GLContextEGL::createPbufferContext(EGLContext sharingCo
 
 PassOwnPtr<GLContextEGL> GLContextEGL::createPixmapContext(EGLContext sharingContext)
 {
-#if PLATFORM(X11)
+#if PLATFORM(GTK) && PLATFORM(WAYLAND) && !defined(GTK_API_VERSION_2)
+    return nullptr;
+#elif PLATFORM(X11)
     EGLDisplay display = sharedEGLDisplay();
     if (display == EGL_NO_DISPLAY)
         return nullptr;

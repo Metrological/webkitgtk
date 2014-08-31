@@ -24,6 +24,7 @@
 #include "GraphicsLayerAnimation.h"
 #include "GraphicsLayerFactory.h"
 #include "ImageBuffer.h"
+#include "TextureMapperBBackingStore.h"
 #include <wtf/CurrentTime.h>
 
 #if USE(TEXTURE_MAPPER)
@@ -446,7 +447,7 @@ void GraphicsLayerTextureMapper::prepareBackingStoreIfNeeded()
         m_changeMask |= BackingStoreChange;
     } else {
         if (!m_backingStore) {
-            m_backingStore = TextureMapperTiledBackingStore::create();
+            m_backingStore = TextureMapperBBackingStore::create();
             m_changeMask |= BackingStoreChange;
         }
     }
@@ -608,12 +609,11 @@ void GraphicsLayerTextureMapper::updateBackingStoreIfNeeded()
     if (dirtyRect.isEmpty())
         return;
 
-    TextureMapperTiledBackingStore* backingStore = static_cast<TextureMapperTiledBackingStore*>(m_backingStore.get());
-
+    TextureMapperBBackingStore* backingStore = static_cast<TextureMapperBBackingStore*>(m_backingStore.get());
     backingStore->updateContents(textureMapper, this, m_size, dirtyRect, BitmapTexture::UpdateCanModifyOriginalImageData);
 
     m_needsDisplay = false;
-    m_needsDisplayRect = IntRect();
+    m_needsDisplayRect = FloatRect();
 }
 
 bool GraphicsLayerTextureMapper::shouldHaveBackingStore() const

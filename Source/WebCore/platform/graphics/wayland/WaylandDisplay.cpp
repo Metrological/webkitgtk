@@ -29,6 +29,7 @@
 #if PLATFORM(WAYLAND)
 
 #include "GLContextEGL.h"
+#include "IntSize.h"
 #include "WaylandSurface.h"
 #include <cstring>
 #include <glib.h>
@@ -58,24 +59,29 @@ void WaylandDisplay::globalRemoveCallback(void*, struct wl_registry*, uint32_t)
 WaylandDisplay* WaylandDisplay::instance()
 {
     static WaylandDisplay* display = nullptr;
-    if (display)
+    static bool initialized = false;
+    if (initialized)
         return display;
 
+    initialized = true;
     struct wl_display* wlDisplay = wl_display_connect("webkitgtk-wayland-compositor-socket");
     if (!wlDisplay)
         return nullptr;
 
     display = new WaylandDisplay(wlDisplay);
+    if (!display->isInitialized()) {
+        delete display;
+        return nullptr;
+    }
+
     return display;
 }
 
 WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
     : m_display(wlDisplay)
-    , m_registry(nullptr)
-    , m_compositor(nullptr)
-    , m_webkitgtk(nullptr)
+    , m_registry(wl_display_get_registry(m_display))
+    , m_eglConfigChosen(false)
 {
-    m_registry = wl_display_get_registry(m_display);
     wl_registry_add_listener(m_registry, &m_registryListener, this);
     wl_display_roundtrip(m_display);
 
@@ -91,31 +97,35 @@ WaylandDisplay::WaylandDisplay(struct wl_display* wlDisplay)
 
     m_eglDisplay = eglGetDisplay(m_display);
     if (m_eglDisplay == EGL_NO_DISPLAY) {
-        g_warning("eglGetDisplay EGL_NO_DISPLAY");
+        g_warning("WaylandDisplay initialization: failed to acquire EGL display.");
         return;
     }
 
     if (eglInitialize(m_eglDisplay, 0, 0) == EGL_FALSE) {
-        g_warning("eglInitialize EGL_FALSE");
+        g_warning("WaylandDisplay initialization: failed to initialize the EGL display.");
         return;
     }
 
     if (eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE) {
-        g_warning("eglBindAPI EGL_FALSE");
+        g_warning("WaylandDisplay initialization: failed to set EGL_OPENGL_ES_API as the rendering API.");
         return;
     }
 
-    EGLint n;
-    if (!eglChooseConfig(m_eglDisplay, configAttributes, &m_eglConfig, 1, &n) || n != 1)
-        g_warning("eglChooseConfig failed");
+    EGLint numberOfConfigs;
+    if (!eglChooseConfig(m_eglDisplay, configAttributes, &m_eglConfig, 1, &numberOfConfigs) || numberOfConfigs != 1) {
+        g_warning("WaylandDisplay initialization: failed to find the desired EGL configuration.");
+        return;
+    }
+
+    m_eglConfigChosen = true;
 }
 
-std::unique_ptr<WaylandSurface> WaylandDisplay::createSurface(int width, int height, int widgetId)
+std::unique_ptr<WaylandSurface> WaylandDisplay::createSurface(const IntSize& size, int widgetID)
 {
     struct wl_surface* wlSurface = wl_compositor_create_surface(m_compositor);
-    EGLNativeWindowType nativeWindow = wl_egl_window_create(wlSurface, std::max(1, width), std::max(1, height));
+    EGLNativeWindowType nativeWindow = wl_egl_window_create(wlSurface, std::max(1, size.width()), std::max(1, size.height()));
 
-    wl_webkitgtk_set_surface_for_widget(m_webkitgtk, wlSurface, widgetId);
+    wl_webkitgtk_set_surface_for_widget(m_webkitgtk, wlSurface, widgetID);
     wl_display_roundtrip(m_display);
 
     return std::make_unique<WaylandSurface>(wlSurface, nativeWindow);

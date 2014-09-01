@@ -39,6 +39,7 @@
 namespace WebCore {
 
 class GLContextEGL;
+class IntSize;
 class WaylandSurface;
 
 class WaylandDisplay {
@@ -48,7 +49,7 @@ public:
     struct wl_display* nativeDisplay() const { return m_display; }
     EGLDisplay eglDisplay() const { return m_eglDisplay; }
 
-    std::unique_ptr<WaylandSurface> createSurface(int, int, int);
+    std::unique_ptr<WaylandSurface> createSurface(const IntSize&, int widgetID);
 
     PassOwnPtr<GLContextEGL> createSharingGLContext();
 
@@ -58,6 +59,7 @@ private:
     static void globalRemoveCallback(void*, struct wl_registry*, uint32_t);
 
     WaylandDisplay(struct wl_display*);
+    bool isInitialized() { return m_compositor && m_webkitgtk && m_eglDisplay != EGL_NO_DISPLAY && m_eglConfigChosen; }
 
     struct wl_display* m_display;
     struct wl_registry* m_registry;
@@ -66,6 +68,7 @@ private:
 
     EGLDisplay m_eglDisplay;
     EGLConfig m_eglConfig;
+    bool m_eglConfigChosen;
 };
 
 } // namespace WebCore

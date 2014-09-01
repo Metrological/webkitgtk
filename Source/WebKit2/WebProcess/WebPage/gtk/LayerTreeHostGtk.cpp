@@ -160,8 +160,7 @@ void LayerTreeHostGtk::initialize()
     if (m_displayType == DISPLAY_TYPE_WAYLAND) {
 #if USE(EGL) && PLATFORM(WAYLAND) && defined(GDK_WINDOWING_WAYLAND)
         // Request a wayland surface from the nested wayland compositor
-        IntSize webPageSize = m_webPage->size();
-        m_wlSurface = WaylandDisplay::instance()->createSurface(webPageSize.width(), webPageSize.height(), m_webPage->pageID());
+        m_wlSurface = WaylandDisplay::instance()->createSurface(m_webPage->size(), m_webPage->pageID());
         if (!m_wlSurface)
             return;
 #endif

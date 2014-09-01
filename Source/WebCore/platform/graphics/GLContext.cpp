@@ -73,6 +73,8 @@ inline ThreadGlobalGLContext* currentContext()
 GLContext* GLContext::sharingContext()
 {
 #if USE(EGL) && PLATFORM(WAYLAND) && PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
+    if (!WaylandDisplay::instance())
+        return nullptr;
     DEPRECATED_DEFINE_STATIC_LOCAL(OwnPtr<GLContext>, sharing, (WaylandDisplay::instance()->createSharingGLContext()));
 #else
     DEPRECATED_DEFINE_STATIC_LOCAL(OwnPtr<GLContext>, sharing, (createOffscreenContext()));
@@ -83,7 +85,9 @@ GLContext* GLContext::sharingContext()
 #if USE(EGL) && PLATFORM(WAYLAND) && PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
 struct wl_display* GLContext::sharedWaylandDisplay()
 {
-    return WaylandDisplay::instance()->nativeDisplay();
+    if (WaylandDisplay::instance())
+        return WaylandDisplay::instance()->nativeDisplay();
+    return nullptr;
 }
 #endif
 

@@ -17,7 +17,7 @@
  */
 
 #include "config.h"
-#if USE(3D_GRAPHICS) || defined(QT_OPENGL_SHIMS)
+#if USE(3D_GRAPHICS) && 0
 
 #define DISABLE_SHIMS
 #include "OpenGLShims.h"

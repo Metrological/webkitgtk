@@ -239,7 +239,6 @@ list(APPEND WebCorePlatformGTK_SOURCES
     platform/gtk/ScrollbarThemeGtk.cpp
     platform/gtk/SharedTimerGtk.cpp
     platform/gtk/SoundGtk.cpp
-    platform/gtk/WidgetBackingStoreGtkX11.cpp
     platform/gtk/WidgetGtk.cpp
 
     rendering/RenderThemeGtk.cpp
@@ -322,15 +321,17 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
     list(APPEND WebCore_INCLUDE_DIRECTORIES
         ${WEBCORE_DIR}/platform/graphics/gstreamer
         ${GSTREAMER_INCLUDE_DIRS}
-        ${GSTREAMER_BASE_INCLUDE_DIRS}
         ${GSTREAMER_APP_INCLUDE_DIRS}
+        ${GSTREAMER_BASE_INCLUDE_DIRS}
+        ${GSTREAMER_GL_INCLUDE_DIRS}
         ${GSTREAMER_PBUTILS_INCLUDE_DIRS}
     )
 
     list(APPEND WebCore_LIBRARIES
+        ${GSTREAMER_LIBRARIES}
         ${GSTREAMER_APP_LIBRARIES}
         ${GSTREAMER_BASE_LIBRARIES}
-        ${GSTREAMER_LIBRARIES}
+        ${GSTREAMER_GL_LIBRARIES}
         ${GSTREAMER_PBUTILS_LIBRARIES}
     )
     # Avoiding a GLib deprecation warning due to GStreamer API using deprecated classes.
@@ -387,7 +388,7 @@ if (WTF_USE_EGL)
     )
 endif ()
 
-if (ENABLE_PLUGIN_PROCESS_GTK2)
+if (OFF)
     # WebKitPluginProcess2 needs a version of WebCore compiled against GTK+2, so we've isolated all the GTK+
     # dependent files into a separate library which can be used to construct a GTK+2 WebCore
     # for the plugin process.
@@ -425,6 +426,7 @@ add_custom_command(
 if (ENABLE_WAYLAND_TARGET)
     list(APPEND WebCorePlatformGTK_SOURCES
         platform/graphics/wayland/WaylandCompositor.cpp
+        platform/graphics/wayland/WaylandCompositorDispmanX2.cpp
         platform/graphics/wayland/WaylandCompositorEGL.cpp
         platform/graphics/wayland/WaylandCompositorSubsurface.cpp
         platform/graphics/wayland/WaylandDisplay.cpp

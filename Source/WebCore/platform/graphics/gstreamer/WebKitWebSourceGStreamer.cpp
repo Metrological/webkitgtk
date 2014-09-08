@@ -700,6 +700,7 @@ static void webKitWebSrcNeedDataCb(GstAppSrc*, guint length, gpointer userData)
 
 static void webKitWebSrcEnoughDataMainCb(WebKitWebSrc* src)
 {
+    fprintf(stderr, "webKitWebSrcEnoughDataMainCb\n");
     WebKitWebSrcPrivate* priv = src->priv;
 
     ASSERT(isMainThread());

@@ -45,7 +45,7 @@ find_package(ATK REQUIRED)
 find_package(WebP REQUIRED)
 find_package(ATSPI 2.5.3)
 find_package(GObjectIntrospection)
-find_package(OpenGL)
+find_package(OpenGLES2)
 find_package(EGL)
 find_package(GeoClue2 2.1.5)
 
@@ -54,9 +54,9 @@ if (NOT GEOCLUE2_FOUND)
 endif ()
 
 WEBKIT_OPTION_BEGIN()
-WEBKIT_OPTION_DEFINE(ENABLE_PLUGIN_PROCESS_GTK2 "Whether to build WebKitPluginProcess2 to load GTK2 based plugins." ON)
+WEBKIT_OPTION_DEFINE(ENABLE_PLUGIN_PROCESS_GTK2 "Whether to build WebKitPluginProcess2 to load GTK2 based plugins." OFF)
 
-if (OPENGL_FOUND AND (GLX_FOUND OR EGL_FOUND))
+if ((OPENGL_FOUND OR OPENGLES2_FOUND) AND (GLX_FOUND OR EGL_FOUND))
     WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBGL ON)
 
     if (GLX_FOUND)
@@ -203,7 +203,7 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
     set(GSTREAMER_COMPONENTS app pbutils)
     add_definitions(-DWTF_USE_GSTREAMER)
     if (ENABLE_VIDEO)
-        list(APPEND GSTREAMER_COMPONENTS video mpegts tag)
+        list(APPEND GSTREAMER_COMPONENTS video mpegts tag gl)
     endif ()
 
     if (ENABLE_WEB_AUDIO)
@@ -286,7 +286,7 @@ if (ENABLE_SPELLCHECK)
     find_package(Enchant REQUIRED)
 endif ()
 
-if (OPENGL_FOUND AND (GLX_FOUND OR EGL_FOUND))
+if ((OPENGL_FOUND OR OPENGLES2_FOUND) AND (GLX_FOUND OR EGL_FOUND))
     set(ENABLE_TEXTURE_MAPPER 1)
     set(WTF_USE_3D_GRAPHICS 1)
 

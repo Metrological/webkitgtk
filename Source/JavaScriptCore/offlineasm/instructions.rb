@@ -262,7 +262,7 @@ ARM_INSTRUCTIONS =
     [
      "clrbp",
      "mvlbl",
-     "ldlbl"
+     "ldlbl",
      "calllbl"
     ]
 

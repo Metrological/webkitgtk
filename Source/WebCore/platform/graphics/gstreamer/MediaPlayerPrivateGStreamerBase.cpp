@@ -366,7 +366,6 @@ PassRefPtr<BitmapTexture> MediaPlayerPrivateGStreamerBase::updateTexture(Texture
                       (m_orientation == GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP));
             }
 
-            g_mutex_unlock(m_bufferMutex);
             return texture;
         }
     }
@@ -425,13 +424,12 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstBuffer* buffer)
 
 void MediaPlayerPrivateGStreamerBase::triggerDrain()
 {
+    GMutexLocker lock(m_bufferMutex);
     m_videoSize.setWidth(0);
     m_videoSize.setHeight(0);
-    g_mutex_lock(m_bufferMutex);
     if (m_buffer)
         gst_buffer_unref(m_buffer);
     m_buffer = 0;
-    g_mutex_unlock(m_bufferMutex);
 }
 
 void MediaPlayerPrivateGStreamerBase::setSize(const IntSize& size)
@@ -478,21 +476,8 @@ void MediaPlayerPrivateGStreamerBase::paintToTextureMapper(TextureMapper* textur
         return;
 
     RefPtr<BitmapTexture> texture = updateTexture(textureMapper);
-    if (texture) {
-#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 1, 2)
-        if (m_orientation == GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP) {
-            TransformationMatrix matrix(modelViewMatrix);
-            matrix.rotate3d(180, 0, 0);
-            matrix.translateRight(0, targetRect.height());
-            textureMapper->drawTexture(*texture.get(), targetRect, matrix, opacity);
-        }
-        else {
-            textureMapper->drawTexture(*texture.get(), targetRect, modelViewMatrix, opacity);
-        }
-#else
+    if (texture)
         textureMapper->drawTexture(*texture.get(), targetRect, modelViewMatrix, opacity);
-#endif
-    }
 }
 #endif
 

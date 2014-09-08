@@ -109,7 +109,6 @@ struct _WebKitVideoSinkPrivate {
         gst_video_info_init(&info);
 
 #if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
-        g_object_set(GST_BASE_SINK(sink), "enable-last-sample", FALSE, NULL);
         pool = NULL;
         last_buffer = NULL;
 
@@ -127,14 +126,14 @@ struct _WebKitVideoSinkPrivate {
         g_cond_clear(&dataCondition);
 
 #if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 3, 0)
-        if (sink->priv->allocateCondition) {
-            g_cond_clear(priv->allocateCondition);
-            g_free(priv->allocateCondition);
+        if (allocateCondition) {
+            g_cond_clear(allocateCondition);
+            g_free(allocateCondition);
         }
 
-        if (sink->priv->allocateMutex) {
-            g_mutex_clear(priv->allocateMutex);
-            g_free(priv->allocateMutex);
+        if (allocateMutex) {
+            g_mutex_clear(allocateMutex);
+            g_free(allocateMutex);
         }
 #endif
     }
@@ -199,6 +198,7 @@ static gboolean _ensure_gl_setup(WebKitVideoSink* gl_sink)
 static void webkit_video_sink_init(WebKitVideoSink* sink)
 {
     sink->priv = G_TYPE_INSTANCE_GET_PRIVATE(sink, WEBKIT_TYPE_VIDEO_SINK, WebKitVideoSinkPrivate);
+    g_object_set(GST_BASE_SINK(sink), "enable-last-sample", FALSE, NULL);
     new (sink->priv) WebKitVideoSinkPrivate();
 }
 

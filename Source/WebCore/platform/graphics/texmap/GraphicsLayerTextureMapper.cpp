@@ -447,7 +447,7 @@ void GraphicsLayerTextureMapper::prepareBackingStoreIfNeeded()
         m_changeMask |= BackingStoreChange;
     } else {
         if (!m_backingStore) {
-            m_backingStore = TextureMapperBBackingStore::create();
+            m_backingStore = TextureMapperTiledBackingStore::create();
             m_changeMask |= BackingStoreChange;
         }
     }
@@ -609,7 +609,7 @@ void GraphicsLayerTextureMapper::updateBackingStoreIfNeeded()
     if (dirtyRect.isEmpty())
         return;
 
-    TextureMapperBBackingStore* backingStore = static_cast<TextureMapperBBackingStore*>(m_backingStore.get());
+    TextureMapperTiledBackingStore* backingStore = static_cast<TextureMapperTiledBackingStore*>(m_backingStore.get());
     backingStore->updateContents(textureMapper, this, m_size, dirtyRect, BitmapTexture::UpdateCanModifyOriginalImageData);
 
     m_needsDisplay = false;

@@ -65,7 +65,7 @@ static uint64_t getCacheDiskFreeSize(SoupCache* cache)
 static uint64_t getMemorySize()
 {
     static uint64_t kDefaultMemorySize = 512;
-#if !OS(WINDOWS)
+#if !OS(WINDOWS) && 0
     long pageSize = sysconf(_SC_PAGESIZE);
     if (pageSize == -1)
         return kDefaultMemorySize;

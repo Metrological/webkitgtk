@@ -158,7 +158,7 @@ bool initializeGStreamerAndRegisterWebKitElements()
     GRefPtr<GstElementFactory> srcFactory = gst_element_factory_find("webkitwebsrc");
     if (!srcFactory) {
         GST_DEBUG_CATEGORY_INIT(webkit_media_player_debug, "webkitmediaplayer", 0, "WebKit media player");
-        gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
+        // gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
     }
 
 #if ENABLE(MEDIA_SOURCE)
@@ -184,7 +184,6 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_seekTime(0)
     , m_changingRate(false)
     , m_endTime(numeric_limits<float>::infinity())
-    , m_isEndReached(false)
     , m_isStreaming(false)
     , m_mediaLocations(0)
     , m_mediaLocationCurrentIndex(0)
@@ -1875,6 +1874,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
     gst_bus_add_signal_watch(bus.get());
     g_signal_connect(bus.get(), "message", G_CALLBACK(mediaPlayerPrivateMessageCallback), this);
 
+    // g_object_set(m_playBin.get(), "mute", m_player->muted(), "flags", GST_PLAY_FLAG_NATIVE_VIDEO | GST_PLAY_FLAG_SOFT_VOLUME | GST_PLAY_FLAG_AUDIO | GST_PLAY_FLAG_VIDEO, NULL);
     g_object_set(m_playBin.get(), "mute", m_player->muted(), NULL);
 
     g_signal_connect(m_playBin.get(), "notify::source", G_CALLBACK(mediaPlayerPrivateSourceChangedCallback), this);

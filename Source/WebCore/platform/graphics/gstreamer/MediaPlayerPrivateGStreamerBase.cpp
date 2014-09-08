@@ -48,6 +48,32 @@
 #include "TextureMapperGL.h"
 #endif
 
+#if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER_GL) && PLATFORM(QT)
+#define GL_GLEXT_PROTOTYPES
+#include "OpenGLShims.h"
+#endif
+
+#define WL_EGL_PLATFORM
+
+#if USE(OPENGL_ES_2)
+#define GL_GLEXT_PROTOTYPES
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#if GST_CHECK_VERSION(1, 3, 0)
+#include <gst/gl/egl/gsteglimagememory.h>
+#endif
+#endif
+
+#define EGL_EGLEXT_PROTOTYPES
+#include <EGL/egl.h>
+
+struct _EGLDetails {
+    EGLDisplay display;
+    EGLContext context;
+    EGLSurface draw;
+    EGLSurface read;
+};
+
 GST_DEBUG_CATEGORY(webkit_media_player_debug);
 #define GST_CAT_DEFAULT webkit_media_player_debug
 
@@ -84,11 +110,17 @@ static void mediaPlayerPrivateRepaintCallback(WebKitVideoSink*, GstBuffer *buffe
     playerPrivate->triggerRepaint(buffer);
 }
 
+static void mediaPlayerPrivateDrainCallback(WebKitVideoSink*, MediaPlayerPrivateGStreamerBase* playerPrivate)
+{
+    playerPrivate->triggerDrain();
+}
+
 MediaPlayerPrivateGStreamerBase::MediaPlayerPrivateGStreamerBase(MediaPlayer* player)
     : m_player(player)
     , m_fpsSink(0)
     , m_readyState(MediaPlayer::HaveNothing)
     , m_networkState(MediaPlayer::Empty)
+    , m_isEndReached(false)
     , m_buffer(0)
     , m_repaintHandler(0)
     , m_volumeSignalHandler(0)
@@ -103,6 +135,10 @@ MediaPlayerPrivateGStreamerBase::~MediaPlayerPrivateGStreamerBase()
         g_signal_handler_disconnect(m_webkitVideoSink.get(), m_repaintHandler);
         m_repaintHandler = 0;
     }
+
+    if (m_drainHandler)
+        g_signal_handler_disconnect(m_webkitVideoSink.get(), m_drainHandler);
+    m_drainHandler = 0;
 
     g_mutex_clear(&m_bufferMutex);
 
@@ -291,6 +327,52 @@ PassRefPtr<BitmapTexture> MediaPlayerPrivateGStreamerBase::updateTexture(Texture
     IntSize size = IntSize(GST_VIDEO_INFO_WIDTH(&videoInfo), GST_VIDEO_INFO_HEIGHT(&videoInfo));
     RefPtr<BitmapTexture> texture = textureMapper->acquireTextureFromPool(size, GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? BitmapTexture::SupportsAlpha : BitmapTexture::NoFlag);
 
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 1, 2)
+    GstMemory *mem;
+    if (gst_buffer_n_memory (m_buffer) >= 1) {
+        if ((mem = gst_buffer_peek_memory (m_buffer, 0)) && gst_is_egl_image_memory (mem)) {
+            guint n, i;
+
+            n = gst_buffer_n_memory (m_buffer);
+
+            LOG_MEDIA_MESSAGE("MediaPlayerPrivateGStreamerBase::updateTexture: buffer contains %d memories", n);
+
+            n = 1; // FIXME
+            const BitmapTextureGL* textureGL = static_cast<const BitmapTextureGL*>(texture.get()); // FIXME
+
+            for (i = 0; i < n; i++) {
+                mem = gst_buffer_peek_memory (m_buffer, i);
+
+                g_assert (gst_is_egl_image_memory (mem));
+
+                if (i == 0)
+                    glActiveTexture (GL_TEXTURE0);
+                else if (i == 1)
+                    glActiveTexture (GL_TEXTURE1);
+                else if (i == 2)
+                    glActiveTexture (GL_TEXTURE2);
+
+                glBindTexture (GL_TEXTURE_2D, textureGL->id()); // FIXME
+                glEGLImageTargetTexture2DOES (GL_TEXTURE_2D,
+                    gst_egl_image_memory_get_image (mem));
+
+                m_orientation = gst_egl_image_memory_get_orientation (mem);
+                if (m_orientation != GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_NORMAL
+                    && m_orientation != GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP) {
+                    LOG_ERROR("MediaPlayerPrivateGStreamerBase::updateTexture: invalid GstEGLImage orientation");
+                }
+                else
+                  LOG_MEDIA_MESSAGE("MediaPlayerPrivateGStreamerBase::updateTexture: texture orientation is Y FLIP?: %d",
+                      (m_orientation == GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP));
+            }
+
+            g_mutex_unlock(m_bufferMutex);
+            return texture;
+        }
+    }
+
+    return 0;
+#else
 #if GST_CHECK_VERSION(1, 1, 0)
     GstVideoGLTextureUploadMeta* meta;
     if ((meta = gst_buffer_get_video_gl_texture_upload_meta(m_buffer))) {
@@ -317,6 +399,8 @@ PassRefPtr<BitmapTexture> MediaPlayerPrivateGStreamerBase::updateTexture(Texture
     gst_video_frame_unmap(&videoFrame);
 
     return texture;
+#endif
+    return 0;
 }
 #endif
 
@@ -337,6 +421,17 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstBuffer* buffer)
 #endif
 
     m_player->repaint();
+}
+
+void MediaPlayerPrivateGStreamerBase::triggerDrain()
+{
+    m_videoSize.setWidth(0);
+    m_videoSize.setHeight(0);
+    g_mutex_lock(m_bufferMutex);
+    if (m_buffer)
+        gst_buffer_unref(m_buffer);
+    m_buffer = 0;
+    g_mutex_unlock(m_bufferMutex);
 }
 
 void MediaPlayerPrivateGStreamerBase::setSize(const IntSize& size)
@@ -374,7 +469,7 @@ void MediaPlayerPrivateGStreamerBase::paint(GraphicsContext* context, const IntR
 }
 
 #if USE(TEXTURE_MAPPER_GL) && !USE(COORDINATED_GRAPHICS)
-void MediaPlayerPrivateGStreamerBase::paintToTextureMapper(TextureMapper* textureMapper, const FloatRect& targetRect, const TransformationMatrix& matrix, float opacity)
+void MediaPlayerPrivateGStreamerBase::paintToTextureMapper(TextureMapper* textureMapper, const FloatRect& targetRect, const TransformationMatrix& modelViewMatrix, float opacity)
 {
     if (textureMapper->accelerationMode() != TextureMapper::OpenGLMode)
         return;
@@ -383,8 +478,21 @@ void MediaPlayerPrivateGStreamerBase::paintToTextureMapper(TextureMapper* textur
         return;
 
     RefPtr<BitmapTexture> texture = updateTexture(textureMapper);
-    if (texture)
-        textureMapper->drawTexture(*texture.get(), targetRect, matrix, opacity);
+    if (texture) {
+#if USE(OPENGL_ES_2) && GST_CHECK_VERSION(1, 1, 2)
+        if (m_orientation == GST_VIDEO_GL_TEXTURE_ORIENTATION_X_NORMAL_Y_FLIP) {
+            TransformationMatrix matrix(modelViewMatrix);
+            matrix.rotate3d(180, 0, 0);
+            matrix.translateRight(0, targetRect.height());
+            textureMapper->drawTexture(*texture.get(), targetRect, matrix, opacity);
+        }
+        else {
+            textureMapper->drawTexture(*texture.get(), targetRect, modelViewMatrix, opacity);
+        }
+#else
+        textureMapper->drawTexture(*texture.get(), targetRect, modelViewMatrix, opacity);
+#endif
+    }
 }
 #endif
 
@@ -427,6 +535,7 @@ GstElement* MediaPlayerPrivateGStreamerBase::createVideoSink()
     m_webkitVideoSink = webkitVideoSinkNew();
 
     m_repaintHandler = g_signal_connect(m_webkitVideoSink.get(), "repaint-requested", G_CALLBACK(mediaPlayerPrivateRepaintCallback), this);
+    m_drainHandler = g_signal_connect(m_webkitVideoSink.get(), "drain", G_CALLBACK(mediaPlayerPrivateDrainCallback), this);
 
     m_fpsSink = gst_element_factory_make("fpsdisplaysink", "sink");
     if (m_fpsSink) {

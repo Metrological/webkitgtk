@@ -1,0 +1,198 @@
+# This file contains generic test expectations that apply to all ports of WebKit.
+#
+# See http://trac.webkit.org/wiki/TestExpectations for more information on this file.
+
+# Incomplete implementation of eventSender causes this test to fail
+webkit.org/b/42194 fast/scrolling/scroll-select-list.html [ ImageOnlyFailure ]
+
+# pending functional patch and per-port verification
+webkit.org/b/109954 css3/line-break [ Skip ]
+
+# media/video-seek-after-end.html is flaky
+webkit.org/b/116293 media/video-seek-after-end.html [ Pass Failure ]
+
+webkit.org/b/116473 editing/selection/user-drag-element-and-user-select-none.html [ Failure ]
+
+# media/W3C/video/networkState/networkState_during_progress.html is flaky
+webkit.org/b/76280 media/W3C/video/networkState/networkState_during_progress.html [ Pass Failure ]
+
+webkit.org/b/118301 fast/dom/timer-throttling-hidden-page.html [ Skip ]
+
+webkit.org/b/119094 fast/forms/color/input-color-onchange-event.html [ Crash Pass ]
+
+# This test will run slowly in debug mode, but is plenty fast in release.
+[ Debug ] js/slow-stress/emscripten-memops.html [ Skip ]
+
+# Skip tests for the old inspector UI that will be ported or removed soon.
+inspector-obsolete [ Skip ]
+
+webkit.org/b/112521 [ Release ] webaudio/javascriptaudionode.html [ Pass Failure ]
+webkit.org/b/112521 [ Debug ] webaudio/javascriptaudionode.html [ Skip ]
+webkit.org/b/112521 [ Release ] webaudio/javascriptaudionode-upmix2-8channel-input.html [ Pass Failure ]
+webkit.org/b/112521 [ Debug ] webaudio/javascriptaudionode-upmix2-8channel-input.html [ Skip ]
+webkit.org/b/112521 [ Release ] webaudio/javascriptaudionode-downmix8-2channel-input.html [ Pass Failure ]
+webkit.org/b/112521 [ Debug ] webaudio/javascriptaudionode-downmix8-2channel-input.html [ Skip ]
+webkit.org/b/112521 [ Release ] webaudio/audioprocessingevent.html [ Pass Failure ]
+webkit.org/b/112521 [ Debug ] webaudio/audioprocessingevent.html [ Skip ]
+
+webkit.org/b/124342 fast/hidpi/image-srcset-svg-canvas.html [ ImageOnlyFailure ]
+webkit.org/b/124342 fast/hidpi/image-srcset-svg-canvas-2x.html [ ImageOnlyFailure ]
+webkit.org/b/124349 fast/hidpi/image-srcset-relative-svg-canvas-2x.html [ ImageOnlyFailure ]
+webkit.org/b/124349 fast/hidpi/image-srcset-relative-svg-canvas.html [ ImageOnlyFailure ]
+
+# The test frequently times out, and is just unsuccessful at detecting incorrect behavior when it passes.
+webkit.org/b/72698 media/audio-garbage-collect.html [ Skip ]
+
+webkit.org/b/53990 fast/forms/search-event-delay.html [ Pass Failure ]
+
+# No port in WebKit already support getMediaStream, so we are skipping those for now.
+fast/mediastream/MediaStream-construct-with-ended-tracks.html [ Skip ]
+fast/mediastream/MediaStream-clone.html [ Skip ]
+
+webkit.org/b/126142 css3/calc/transitions-dependent.html [ Pass Failure ]
+
+webkit.org/b/124932 media/video-size.html [ Pass Failure ]
+
+webkit.org/b/126166 [ Debug ] js/dfg-int32array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-uint16array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-float32array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-uint8clampedarray.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-int8array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-float64array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-uint8array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-int16array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-int32array-overflow-values.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-uint32array.html [ Skip ]
+webkit.org/b/126166 [ Debug ] js/dfg-uint32array-overflow-values.html [ Skip ]
+
+webkit.org/b/127860 [ Debug ] js/function-apply-aliased.html [ Skip ]
+
+# This test verifies dynamic manipulation of the mroot and msqrt elements.
+mathml/roots-removeChild.html [ ImageOnlyFailure ]
+
+# This test verifies that a mismatch reftest will fail as intended if both results are same. (introduced in r93187)
+fast/harness/sample-fail-mismatch-reftest.html [ WontFix ImageOnlyFailure ]
+
+webkit.org/b/127697 fast/writing-mode/ruby-text-logical-left.html [ Skip ]
+
+webkit.org/b/83618 fast/dom/inline-event-attributes-release.html [ Failure ]
+
+webkit.org/b/129057 media/controls-styling-strict.html [ Pass Failure ]
+
+#subpixel failure on non-retina displays.
+webkit.org/b/129050 fast/sub-pixel/compositing-layers-on-subpixel-position.html [ ImageOnlyFailure ]
+webkit.org/b/129113 fast/multicol/newmulticol/clipping.html [ ImageOnlyFailure ]
+#subpixel rotation
+webkit.org/b/130556 compositing/hidpi-absolute-subpixel-positioned-transformed-elements.html [ ImageOnlyFailure ]
+
+webkit.org/b/133761 inspector-protocol/debugger/breakpoint-action-detach.html [ Skip ]
+webkit.org/b/129639 inspector-protocol/dom/dom-search-crash.html [ Skip ]
+webkit.org/b/129327 inspector-protocol/indexeddb/basics.html [ Pass Failure ]
+webkit.org/b/127414 inspector-protocol/page/deny-X-FrameOption.html [ Pass Failure ]
+
+webkit.org/b/129642 inspector [ Skip ]
+
+# These tests cause assertion failures in subsequent tests
+webkit.org/b/131919 inspector/dom [ Skip ]
+
+# Disabled the expectations because these tests are also skipped above.
+# webkit.org/b/129817 inspector/dom/content-flow-list.html [ Pass Failure ]
+# webkit.org/b/129817 inspector/dom/content-flow-content-removal.html [ Pass Failure ]
+
+# Collecting region's children in a named flow not supported yet
+webkit.org/b/74144 fast/regions/flow-body-in-html.html [ Skip ]
+webkit.org/b/74144 fast/regions/universal-selector-children-to-the-same-region.html [ Skip ]
+webkit.org/b/74144 fast/regions/region-content-flown-into-region.html [ Skip ]
+
+# Doesn't work yet, relies on network replay functionality (webkit.org/b/130728, webkit.org/b/129391)
+webkit.org/b/131318 http/tests/inspector/replay/document-last-modified-fallback-value.html [ Skip ]
+
+# Asserts in debug builds.
+[ Debug ] http/tests/inspector/replay/document-last-modified-fallback-value.html [ Skip ]
+
+# Expando properties on attribute nodes disappear
+webkit.org/b/88045 fast/dom/gc-attribute-node.html [ Failure Pass ]
+
+# Reference expectation doesn't end up in compositing code path, leading to antialiasing differences.
+webkit.org/b/132421 fast/multicol/fixed-stack.html [ ImageOnlyFailure ]
+
+
+# These tests are incorrect in the CSS test suite and should be fixed there first.
+css2.1/20110323/replaced-intrinsic-001.htm [ Failure ]
+css2.1/20110323/replaced-intrinsic-002.htm [ Failure ]
+
+webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-fixed.html [ Skip ]
+webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-percentage.html [ Skip ]
+webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-auto.html [ Skip ]
+
+webkit.org/b/133057 fast/table/border-collapsing/collapsed-borders-adjoining-sections.html [ ImageOnlyFailure ]
+
+# Failing on some bots due to using resource load callbacks
+webkit.org/b/134769 fast/dom/HTMLImageElement/sizes/image-sizes-js-change.html [ Skip ]
+
+webkit.org/b/128736 inspector-protocol/debugger/setBreakpoint-dfg.html [ Failure Pass ]
+webkit.org/b/134982 inspector-protocol/debugger/setBreakpoint-dfg-and-modify-local.html [ Failure Pass ]
+
+# CSS Font Loading is not yet enabled on all platforms
+webkit.org/b/135390 fast/css/fontloader-download-error.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-events.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-loadingdone.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-multiple-faces-download-error.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-multiple-faces.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-multiple-families.html [ Skip ]
+webkit.org/b/135390 fast/css/fontloader-page-cache.html [ Skip ]
+webkit.org/b/135390 http/tests/webfont/fontloader-loading-attribute.html [ Skip ]
+
+# Various failures from the W3C CSS Shapes test suite import
+
+webkit.org/b/135923 css3/shapes/shape-outside/shape-image/gradients/shape-outside-radial-gradient-001.html [ ImageOnlyFailure ]
+webkit.org/b/135923 css3/shapes/shape-outside/shape-image/gradients/shape-outside-radial-gradient-002.html [ ImageOnlyFailure ]
+webkit.org/b/135923 css3/shapes/shape-outside/shape-image/gradients/shape-outside-radial-gradient-003.html [ ImageOnlyFailure ]
+webkit.org/b/135923 css3/shapes/shape-outside/shape-image/gradients/shape-outside-radial-gradient-004.html [ ImageOnlyFailure ]
+
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-010.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-011.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-012.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-013.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-014.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-015.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-016.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-017.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-018.html [ ImageOnlyFailure ]
+webkit.org/b/135927 css3/shapes/spec-examples/shape-outside-019.html [ ImageOnlyFailure ]
+
+# border painting diff (Path vs. drawLine)
+webkit.org/b/136078 fast/borders/border-painting-dashed.html [ ImageOnlyFailure ]
+webkit.org/b/136078 fast/borders/border-painting-dotted.html [ ImageOnlyFailure ]
+webkit.org/b/136078 fast/borders/border-painting-double.html [ ImageOnlyFailure ]
+
+# official flexbox tests
+webkit.org/b/136754 css3/flexbox/csswg/css-box-justify-content.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/css-flexbox-img-expand-evenly.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/css-flexbox-row.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/css-flexbox-test1.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-align-items-center.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-flexitem-percentage-prescation.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-items-flexibility.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-lines/multi-line-wrap-reverse-column-reverse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-lines/multi-line-wrap-with-column-reverse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flex-margin-no-collapse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox-flex-wrap-flexing.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_flex-0-0-0.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_flex-0-1-0.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_flex-0-N-0.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_flex-natural-mixed-basis-auto.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_generated-container.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_justifycontent-center-overflow.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_min-height-auto.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_min-width-auto.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_stf-table-singleline.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_visibility-collapse-line-wrapping.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_visibility-collapse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/flexbox_writing_mode_vertical_lays_out_contents_from_top_to_bottom.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/order/order-with-column-reverse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/ttwf-reftest-flex-direction-row-reverse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/ttwf-reftest-flex-inline.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/ttwf-reftest-flex-order.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/ttwf-reftest-flex-wrap-reverse.html [ ImageOnlyFailure ]
+webkit.org/b/136754 css3/flexbox/csswg/ttwf-reftest-flex-wrap.html [ ImageOnlyFailure ]

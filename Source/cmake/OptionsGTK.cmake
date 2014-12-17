@@ -171,6 +171,10 @@ if (ENABLE_WAYLAND_TARGET)
     add_definitions(-DWTF_PLATFORM_WAYLAND=1)
 endif ()
 
+if (ENABLE_DXDRM)
+    add_definitions(-DWTF_USE_DXDRM=1)
+endif ()
+
 set(ENABLE_WEBCORE ON)
 set(ENABLE_INSPECTOR ON)
 set(ENABLE_WEBKIT OFF)

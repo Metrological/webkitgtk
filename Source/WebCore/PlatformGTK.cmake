@@ -87,6 +87,8 @@ list(APPEND WebCore_SOURCES
     platform/graphics/gstreamer/WebKitMediaSourceGStreamer.cpp
     platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
 
+    platform/graphics/gstreamer/CDMSessionGStreamer.cpp
+
     platform/graphics/harfbuzz/HarfBuzzFace.cpp
     platform/graphics/harfbuzz/HarfBuzzFaceCairo.cpp
     platform/graphics/harfbuzz/HarfBuzzShaper.cpp
@@ -322,6 +324,12 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     ${WEBP_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIRS}
 )
+
+if (ENABLE_DXDRM)
+    list(APPEND WebCore_LIBRARIES
+        -lDxDrm
+    )
+endif ()
 
 if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
     list(APPEND WebCore_INCLUDE_DIRECTORIES
